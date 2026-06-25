@@ -13,9 +13,9 @@ func NewUserController() *userController {
 }
 
 func (u *userController) Register(c *echo.Group) {
-	c.GET("users/:userId/avatar", u.Avatar)
-	c.GET("users/:userId/avatars", u.Avatars)
-	c.DELETE("users/:userId/avatar", u.Delete)
+	c.GET("/users/:userId/avatar", u.Avatar)
+	c.GET("/users/:userId/avatars", u.Avatars)
+	c.DELETE("/users/:userId/avatar", u.Delete)
 }
 
 func (u *userController) Avatar(c echo.Context) error {
