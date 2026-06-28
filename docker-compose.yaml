@@ -1,0 +1,8 @@
+services:
+  goph:
+    image: goph
+    build:
+      context: .
+      dockerfile: cmd/server/Dockerfile
+    ports:
+      - 8080:8080
