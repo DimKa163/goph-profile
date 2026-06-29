@@ -6,3 +6,40 @@ services:
       dockerfile: cmd/server/Dockerfile
     ports:
       - 8080:8080
+    environment:
+      GOPH_ADDR: ":8080"
+      GOPH_DATABASE: "postgres://dev:dev@psql:5432/goph?sslmode=disable"
+      GOPH_BUCKET: "goph"
+      GOPH_REGION: "eu-east-1"
+      GOPH_ENDPOINT: "http://minio:9000"
+      GOPH_ACCESS_KEY: "admin"
+      GOPH_SECRET_KEY: "admin12345"
+      GOPH_USE_SSL: false
+
+  psql:
+    image: postgres:17-alpine
+    volumes:
+      - psql:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: goph
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin12345
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  psql:
+  minio_data:
