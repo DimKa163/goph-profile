@@ -3,9 +3,15 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/DimKa163/goph-profile/internal/api"
 	"github.com/DimKa163/goph-profile/internal/config"
 	"github.com/DimKa163/goph-profile/internal/handlers"
+	"github.com/DimKa163/goph-profile/internal/img"
 	"github.com/DimKa163/goph-profile/internal/infra"
 	"github.com/DimKa163/goph-profile/internal/infra/repository"
 	"github.com/aws/aws-sdk-go/aws"
@@ -15,10 +21,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
-	"net/http"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 func main() {
@@ -136,5 +138,5 @@ func newAvatarService(conf config.GophConfig, pool *pgxpool.Pool) handlers.Uploa
 		S3ForcePathStyle: aws.Bool(true),
 		Credentials:      credentials.NewStaticCredentials(conf.AccessKey, conf.SecretKey, ""),
 		DisableSSL:       aws.Bool(!conf.UseSSL),
-	}, conf.Bucket), repository.NewAvatarRepository(pool))
+	}, conf.Bucket), repository.NewAvatarRepository(pool), img.NewDecoder())
 }
