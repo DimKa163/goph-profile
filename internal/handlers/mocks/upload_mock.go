@@ -11,6 +11,7 @@ import (
 	reflect "reflect"
 
 	entity "github.com/DimKa163/goph-profile/internal/entity"
+	kafka "github.com/DimKa163/goph-profile/internal/infra/kafka"
 	guid "github.com/beevik/guid"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -141,4 +142,46 @@ func (m *MockDecoder) DecodeConfig(r io.ReadSeeker) (image.Config, error) {
 func (mr *MockDecoderMockRecorder) DecodeConfig(r interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeConfig", reflect.TypeOf((*MockDecoder)(nil).DecodeConfig), r)
+}
+
+// MockProducer is a mock of Producer interface.
+type MockProducer struct {
+	ctrl     *gomock.Controller
+	recorder *MockProducerMockRecorder
+}
+
+// MockProducerMockRecorder is the mock recorder for MockProducer.
+type MockProducerMockRecorder struct {
+	mock *MockProducer
+}
+
+// NewMockProducer creates a new mock instance.
+func NewMockProducer(ctrl *gomock.Controller) *MockProducer {
+	mock := &MockProducer{ctrl: ctrl}
+	mock.recorder = &MockProducerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockProducer) EXPECT() *MockProducerMockRecorder {
+	return m.recorder
+}
+
+// Write mocks base method.
+func (m *MockProducer) Write(ctx context.Context, key, value []byte, headers ...kafka.Header) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, key, value}
+	for _, a := range headers {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Write", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Write indicates an expected call of Write.
+func (mr *MockProducerMockRecorder) Write(ctx, key, value interface{}, headers ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, key, value}, headers...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockProducer)(nil).Write), varargs...)
 }

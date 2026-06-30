@@ -25,12 +25,11 @@ func NewS3(config *aws.Config, bucketName string) *s3Client {
 }
 
 func (s *s3Client) Upload(ctx context.Context, key string, reader io.ReadSeeker) error {
-	o, err := s.client.PutObjectWithContext(ctx, &s3.PutObjectInput{
+	_, err := s.client.PutObjectWithContext(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(key),
 		Body:   reader,
 	})
-	fmt.Println(o)
 	if err != nil {
 		return fmt.Errorf("failed to upload object: %w", err)
 	}

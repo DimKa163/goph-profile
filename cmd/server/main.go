@@ -13,13 +13,16 @@ import (
 	"github.com/DimKa163/goph-profile/internal/handlers"
 	"github.com/DimKa163/goph-profile/internal/img"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/infra/repository"
+	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/caarlos0/env"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
 
@@ -35,7 +38,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
+	ctx = logging.SetLogger(ctx, logger)
 	pgpool, err := createPg(ctx, conf)
 	if err != nil {
 		logger.Fatal("failed to connect to postgres", zap.Error(err))
@@ -45,6 +48,12 @@ func main() {
 	if err = infra.Migrate(pgpool, "./migrations"); err != nil {
 		logger.Fatal("failed to migrate", zap.Error(err))
 	}
+
+	cl, err := newClient(conf)
+	if err != nil {
+		logger.Fatal("failed to create client", zap.Error(err))
+	}
+	defer cl.Close()
 	e := echo.New()
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -56,6 +65,10 @@ func main() {
 		LogHost:      true,
 		LogUserAgent: true,
 		LogError:     true,
+		BeforeNextFunc: func(c echo.Context) {
+			req := c.Request()
+			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
+		},
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			fields := []zap.Field{
 				zap.String("method", v.Method),
@@ -66,19 +79,18 @@ func main() {
 				zap.String("host", v.Host),
 				zap.String("user_agent", v.UserAgent),
 			}
-
+			log := logging.Logger(c.Request().Context())
 			if v.Error != nil {
 				fields = append(fields, zap.Error(v.Error))
 			}
 
 			if v.Status >= 500 {
-				logger.Error("request failed", fields...)
+				log.Error("request failed", fields...)
 			} else if v.Status >= 400 {
-				logger.Warn("request client error", fields...)
+				log.Warn("request client error", fields...)
 			} else {
-				logger.Info("request", fields...)
+				log.Info("request", fields...)
 			}
-			c.Request().WithContext(context.WithValue(c.Request().Context(), "logger", logger))
 			return nil
 		},
 	}))
@@ -98,7 +110,7 @@ func main() {
 	v1 := webApi.Group("/v1")
 	uc := api.NewUserController()
 	uc.Register(v1)
-	ac := api.NewAvatarController(newAvatarService(conf, pgpool))
+	ac := api.NewAvatarController(newAvatarService(conf, pgpool, cl))
 	ac.Register(v1)
 	server := &http.Server{
 		Addr:    conf.Addr,
@@ -131,12 +143,24 @@ func createPg(ctx context.Context, conf config.GophConfig) (*pgxpool.Pool, error
 	return p, nil
 }
 
-func newAvatarService(conf config.GophConfig, pool *pgxpool.Pool) handlers.Uploader {
+func newClient(conf config.GophConfig) (*kgo.Client, error) {
+	return kgo.NewClient(
+		kgo.SeedBrokers(conf.Brokers),
+		kgo.RequiredAcks(kgo.AllISRAcks()),
+		kgo.RecordDeliveryTimeout(time.Duration(conf.DeliveryTimeout)*time.Second),
+		kgo.ProducerBatchMaxBytes(int32(conf.BatchMaxSize)*1024),
+		kgo.ProducerLinger(100*time.Millisecond),
+		kgo.RecordPartitioner(kgo.StickyKeyPartitioner(nil)),
+	)
+}
+
+func newAvatarService(conf config.GophConfig, pool *pgxpool.Pool, client *kgo.Client) handlers.Uploader {
 	return handlers.NewUploader(infra.NewS3(&aws.Config{
-		Region:           aws.String(conf.Region),
-		Endpoint:         aws.String(conf.Endpoint),
-		S3ForcePathStyle: aws.Bool(true),
+		Region:           new(conf.Region),
+		Endpoint:         new(conf.Endpoint),
+		S3ForcePathStyle: new(true),
 		Credentials:      credentials.NewStaticCredentials(conf.AccessKey, conf.SecretKey, ""),
-		DisableSSL:       aws.Bool(!conf.UseSSL),
-	}, conf.Bucket), repository.NewAvatarRepository(pool), img.NewDecoder())
+		DisableSSL:       new(!conf.UseSSL),
+	}, conf.Bucket), repository.NewAvatarRepository(pool), img.NewDecoder(),
+		kafka.NewProducer(client, kafka.Topic("avatar")))
 }

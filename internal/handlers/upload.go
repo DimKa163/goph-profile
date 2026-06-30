@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/beevik/guid"
 )
 
@@ -48,7 +49,12 @@ type Decoder interface {
 	DecodeConfig(r io.ReadSeeker) (image.Config, error)
 }
 
-func NewUploader(uploader S3Uploader, repository AvatarInsertUpdaterRepository, imgDecoder Decoder) Uploader {
+//go:generate mockgen -source=upload.go -destination=mocks/upload_mock.go -package=mocks
+type Producer interface {
+	Write(ctx context.Context, key []byte, value []byte, headers ...kafka.Header) error
+}
+
+func NewUploader(uploader S3Uploader, repository AvatarInsertUpdaterRepository, imgDecoder Decoder, producer Producer) Uploader {
 	return func(ctx context.Context, avatar *Avatar, userID guid.Guid) (*UploaderState, error) {
 		if err := validateAvatarSize(avatar.Size); err != nil {
 			return nil, err
@@ -78,7 +84,21 @@ func NewUploader(uploader S3Uploader, repository AvatarInsertUpdaterRepository, 
 		if err != nil {
 			return nil, err
 		}
-		// TODO produce
+		ev := &entity.AvatarUploadEvent{
+			AvatarID: e.ID.String(),
+			UserID:   userID.String(),
+			S3Key:    s3Key,
+		}
+		value, err := ev.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		if err = producer.Write(ctx, []byte(e.ID.String()), value, kafka.Header{
+			Key:   "event-type",
+			Value: []byte("avatar-uploaded"),
+		}); err != nil {
+			return nil, err
+		}
 		return &UploaderState{
 			ID:        e.ID.String(),
 			UserID:    userID.String(),
