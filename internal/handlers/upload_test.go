@@ -9,6 +9,7 @@ import (
 
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/handlers/mocks"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/beevik/guid"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -22,8 +23,8 @@ func TestUploaderShould_BeSuccess(t *testing.T) {
 	s3 := mocks.NewMockS3Uploader(ctrl)
 	repo := mocks.NewMockAvatarInsertUpdaterRepository(ctrl)
 	decoder := mocks.NewMockDecoder(ctrl)
-
-	uploader := NewUploader(s3, repo, decoder)
+	producer := mocks.NewMockProducer(ctrl)
+	uploader := NewUploader(s3, repo, decoder, producer)
 
 	avatar := &Avatar{
 		Name:     "avatar",
@@ -79,6 +80,11 @@ func TestUploaderShould_BeSuccess(t *testing.T) {
 	}
 	repo.EXPECT().Update(ctx, gomock.Any()).Return(e1, nil)
 
+	producer.EXPECT().Write(ctx, gomock.Any(), gomock.Any(), kafka.Header{
+		Key:   "event-type",
+		Value: []byte("avatar-uploaded"),
+	}).Return(nil)
+
 	st, err := uploader(ctx, avatar, *userID)
 
 	require.NoError(t, err)
@@ -93,8 +99,9 @@ func TestUploaderShouldReturnErrIfSizeTooBig(t *testing.T) {
 	s3 := mocks.NewMockS3Uploader(ctrl)
 	repo := mocks.NewMockAvatarInsertUpdaterRepository(ctrl)
 	decoder := mocks.NewMockDecoder(ctrl)
+	producer := mocks.NewMockProducer(ctrl)
 
-	uploader := NewUploader(s3, repo, decoder)
+	uploader := NewUploader(s3, repo, decoder, producer)
 
 	avatar := &Avatar{
 		Name:     "avatar",
@@ -119,8 +126,9 @@ func TestUploaderShouldReturnErrIfTypeisWrong(t *testing.T) {
 	s3 := mocks.NewMockS3Uploader(ctrl)
 	repo := mocks.NewMockAvatarInsertUpdaterRepository(ctrl)
 	decoder := mocks.NewMockDecoder(ctrl)
+	producer := mocks.NewMockProducer(ctrl)
 
-	uploader := NewUploader(s3, repo, decoder)
+	uploader := NewUploader(s3, repo, decoder, producer)
 
 	avatar := &Avatar{
 		Name:     "avatar",
