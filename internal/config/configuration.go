@@ -12,5 +12,6 @@ type GophConfig struct {
 	Brokers         string `env:"GOPH_BROKERS"`
 	BatchMaxSize    int    `env:"GOPH_BATCH_MAX_SIZE" envDefault:"1024"`
 	DeliveryTimeout int    `env:"GOPH_DELIVERY_TIMEOUT" envDefault:"10"`
+	Group           string `env:"GOPH_GROUP" envDefault:"profile"`
 	AutoCommit      bool   `env:"GOPH_AUTOCOMMIT" envDefault:"false"`
 }

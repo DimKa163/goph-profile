@@ -10,14 +10,12 @@ import (
 
 	"github.com/DimKa163/goph-profile/internal/api"
 	"github.com/DimKa163/goph-profile/internal/config"
-	"github.com/DimKa163/goph-profile/internal/handlers"
 	"github.com/DimKa163/goph-profile/internal/img"
 	"github.com/DimKa163/goph-profile/internal/infra"
 	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/infra/repository"
 	"github.com/DimKa163/goph-profile/internal/logging"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/DimKa163/goph-profile/internal/services"
 	"github.com/caarlos0/env"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -154,13 +152,15 @@ func newClient(conf config.GophConfig) (*kgo.Client, error) {
 	)
 }
 
-func newAvatarService(conf config.GophConfig, pool *pgxpool.Pool, client *kgo.Client) handlers.Uploader {
-	return handlers.NewUploader(infra.NewS3(&aws.Config{
-		Region:           new(conf.Region),
-		Endpoint:         new(conf.Endpoint),
-		S3ForcePathStyle: new(true),
-		Credentials:      credentials.NewStaticCredentials(conf.AccessKey, conf.SecretKey, ""),
-		DisableSSL:       new(!conf.UseSSL),
-	}, conf.Bucket), repository.NewAvatarRepository(pool), img.NewDecoder(),
+func newAvatarService(conf config.GophConfig, pool *pgxpool.Pool, client *kgo.Client) *services.AvatarService {
+	return services.NewAvatarService(repository.NewAvatarRepository(pool),
+		infra.NewS3(conf.Bucket,
+			infra.Region(conf.Region),
+			infra.Endpoint(conf.Endpoint),
+			infra.ForcePathStyle(),
+			infra.Credential(conf.AccessKey, conf.SecretKey, ""),
+			infra.UseSSL(conf.UseSSL),
+		),
+		img.NewCodec(),
 		kafka.NewProducer(client, kafka.Topic("avatar")))
 }

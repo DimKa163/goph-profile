@@ -1,21 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
-	"time"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
-	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/beevik/guid"
+	_ "golang.org/x/image/webp"
 )
-
-const maxAvatarSize = 10 * 1024 * 1024
 
 type (
 	Avatar struct {
@@ -24,103 +19,72 @@ type (
 		MimeType string
 		Reader   io.ReadSeeker
 	}
-	Uploader      func(ctx context.Context, avatar *Avatar, userId guid.Guid) (*UploaderState, error)
-	UploaderState struct {
-		ID        string    `json:"id"`
-		UserID    string    `json:"userId"`
-		Status    string    `json:"status"`
-		CreatedAt time.Time `json:"createdAt"`
-	}
+	UploaderHandler func(ctx context.Context, event *entity.AvatarUploadedEvent) error
 )
 
-//go:generate mockgen -source=upload.go -destination=mocks/upload_mock.go -package=mocks
-type S3Uploader interface {
-	Upload(ctx context.Context, key string, reader io.ReadSeeker) error
-}
-
-//go:generate mockgen -source=upload.go -destination=mocks/upload_mock.go -package=mocks
-type AvatarInsertUpdaterRepository interface {
-	Insert(ctx context.Context, name, mimeType string, size int64, width, height int, userID guid.Guid) (*entity.Avatar, error)
+type AvatarRepository interface {
+	Find(ctx context.Context, id guid.Guid) (*entity.Avatar, error)
 	Update(ctx context.Context, e *entity.Avatar) (*entity.Avatar, error)
 }
 
-//go:generate mockgen -source=upload.go -destination=mocks/upload_mock.go -package=mocks
-type Decoder interface {
-	DecodeConfig(r io.ReadSeeker) (image.Config, error)
+type S3 interface {
+	Upload(ctx context.Context, key string, reader io.ReadSeeker) error
+	Download(ctx context.Context, key string) ([]byte, error)
 }
 
-//go:generate mockgen -source=upload.go -destination=mocks/upload_mock.go -package=mocks
-type Producer interface {
-	Write(ctx context.Context, key []byte, value []byte, headers ...kafka.Header) error
+type ImageCodec interface {
+	Decode(r io.Reader) (image.Image, string, error)
+	Encode(src image.Image, format string, quality int) ([]byte, error)
+	Thumbnail(src image.Image, h, w int) image.Image
 }
 
-func NewUploader(uploader S3Uploader, repository AvatarInsertUpdaterRepository, imgDecoder Decoder, producer Producer) Uploader {
-	return func(ctx context.Context, avatar *Avatar, userID guid.Guid) (*UploaderState, error) {
-		if err := validateAvatarSize(avatar.Size); err != nil {
-			return nil, err
-		}
-		if err := validateContentType(avatar.MimeType); err != nil {
-			return nil, err
-		}
-		cfg, err := imgDecoder.DecodeConfig(avatar.Reader)
+func NewUploadHandler(repo AvatarRepository, s3 S3, codec ImageCodec) UploaderHandler {
+	return func(ctx context.Context, event *entity.AvatarUploadedEvent) error {
+		avatarID, _ := guid.ParseString(event.AvatarID)
+		userID, _ := guid.ParseString(event.UserID)
+		meta, err := repo.Find(ctx, *avatarID)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		e, err := repository.Insert(ctx, avatar.Name, avatar.MimeType, avatar.Size, cfg.Width, cfg.Height, userID)
+		buffer, err := s3.Download(ctx, event.S3Key)
 		if err != nil {
-			return nil, err
-		}
-		s3Key := fmt.Sprintf("avatar_%s_%s", e.ID.String(), avatar.Name)
-		if err = uploader.Upload(ctx, s3Key, avatar.Reader); err != nil {
-			return nil, err
+			return err
 		}
 
-		e.S3Key = s3Key
-		e.UploadStatus = "uploaded"
-		e.ProcessingStatus = "processing"
+		src, format, _ := codec.Decode(bytes.NewBuffer(buffer))
 
-		e, err = repository.Update(ctx, e)
+		src100 := codec.Thumbnail(src, 100, 100)
+		th100 := &entity.Thumbnail{
+			Size: fmt.Sprintf("%dx%d", src100.Bounds().Dx(), src100.Bounds().Dy()),
+			Url:  fmt.Sprintf("thumbnail/%s/av%s.%s", userID, meta.ID.String(), format),
+		}
+		buf100, err := codec.Encode(src100, format, 85)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		ev := &entity.AvatarUploadEvent{
-			AvatarID: e.ID.String(),
-			UserID:   userID.String(),
-			S3Key:    s3Key,
+		if err = s3.Upload(ctx, th100.Url, bytes.NewReader(buf100)); err != nil {
+			return err
 		}
-		value, err := ev.Bytes()
+		meta.Thumbnails = append(meta.Thumbnails, th100)
+
+		src300 := codec.Thumbnail(src, 300, 300)
+		th300 := &entity.Thumbnail{
+			Size: fmt.Sprintf("%dx%d", src300.Bounds().Dx(), src300.Bounds().Dy()),
+			Url:  fmt.Sprintf("thumbnail/%s/av%s.%s", userID, meta.ID.String(), format),
+		}
+		buf300, err := codec.Encode(src300, format, 85)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if err = producer.Write(ctx, []byte(e.ID.String()), value, kafka.Header{
-			Key:   "event-type",
-			Value: []byte("avatar-uploaded"),
-		}); err != nil {
-			return nil, err
+		if err = s3.Upload(ctx, th300.Url, bytes.NewReader(buf300)); err != nil {
+			return err
 		}
-		return &UploaderState{
-			ID:        e.ID.String(),
-			UserID:    userID.String(),
-			Status:    e.ProcessingStatus,
-			CreatedAt: e.CreatedAt,
-		}, nil
-	}
-}
-func validateAvatarSize(size int64) error {
-	if size > maxAvatarSize {
-		return entity.ErrTooBigSizeErrorMessage
-	}
-	return nil
-}
-func validateContentType(contentType string) error {
-	switch contentType {
-	case "image/jpeg",
-		"image/png",
-		"image/gif",
-		"image/webp":
+		meta.Thumbnails = append(meta.Thumbnails, th300)
+		meta.ProcessingStatus = "completed"
+		if _, err = repo.Update(ctx, meta); err != nil {
+			return err
+		}
 		return nil
-	default:
-		return fmt.Errorf("%w: %s", entity.ErrInvalidContentErrorMessage, contentType)
 	}
 }

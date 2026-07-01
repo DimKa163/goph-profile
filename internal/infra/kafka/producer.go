@@ -9,10 +9,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type Header struct {
-	Key   string
-	Value []byte
-}
 type ProducerOption func(p *kafkaProducer)
 
 type kafkaProducer struct {
@@ -33,7 +29,7 @@ func (p *kafkaProducer) Write(ctx context.Context, key []byte, value []byte, hea
 	for i, h := range headers {
 		rh[i] = kgo.RecordHeader{
 			Key:   h.Key,
-			Value: h.Value,
+			Value: []byte(h.Value),
 		}
 	}
 	rh[len(headers)] = kgo.RecordHeader{

@@ -28,16 +28,20 @@ type Thumbnail struct {
 	Url  string
 }
 
-type AvatarUploadEvent struct {
+type AvatarUploadedEvent struct {
 	AvatarID string `json:"avatar_id"`
 	UserID   string `json:"user_id"`
 	S3Key    string `json:"s3_key"`
 }
 
-func (e *AvatarUploadEvent) Read(data []byte) error {
+func (e *AvatarUploadedEvent) Read(data []byte) error {
 	return json.Unmarshal(data, e)
 }
 
-func (e *AvatarUploadEvent) Bytes() ([]byte, error) {
+func (e *AvatarUploadedEvent) Bytes() ([]byte, error) {
 	return json.Marshal(e)
+}
+
+func (e *AvatarUploadedEvent) String() string {
+	return "AvatarUploadedEvent"
 }
