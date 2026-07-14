@@ -6,71 +6,22 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type S3Option func(*aws.Config)
-
-func Region(region string) S3Option {
-	return func(c *aws.Config) {
-		c.Region = new(region)
-	}
-}
-
-func Endpoint(region string) S3Option {
-	return func(c *aws.Config) {
-		c.Endpoint = new(region)
-	}
-}
-
-func Credential(accessKey, secretKey, token string) S3Option {
-	return func(c *aws.Config) {
-		c.Credentials = credentials.NewStaticCredentials(accessKey, secretKey, token)
-	}
-}
-
-func ForcePathStyle() S3Option {
-	return func(c *aws.Config) {
-		c.S3ForcePathStyle = new(true)
-	}
-}
-
-func UseSSL(val bool) S3Option {
-	return func(c *aws.Config) {
-		c.DisableSSL = new(!val)
-	}
-}
-
-func MaxRetries(n int) S3Option {
-	return func(c *aws.Config) {
-		c.MaxRetries = new(n)
-	}
-}
-
 type s3Client struct {
-	client     *s3.S3
+	client     *s3.Client
 	bucketName string
 }
 
-func NewS3(bucketName string, opt ...S3Option) *s3Client {
-	if len(opt) == 0 {
-		panic("no options provided")
-	}
-	var config aws.Config
-	for _, o := range opt {
-		o(&config)
-	}
-	sess := session.Must(session.NewSession(&config))
+func NewS3(client *s3.Client, bucket string) *s3Client {
 	return &s3Client{
-		client:     s3.New(sess),
-		bucketName: bucketName,
+		client:     client,
+		bucketName: bucket,
 	}
 }
 func (s *s3Client) Check(ctx context.Context) error {
-	_, err := s.client.HeadBucketWithContext(ctx, &s3.HeadBucketInput{
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: new(s.bucketName),
 	})
 	if err != nil {
@@ -80,7 +31,7 @@ func (s *s3Client) Check(ctx context.Context) error {
 	return nil
 }
 func (s *s3Client) Upload(ctx context.Context, key string, reader io.ReadSeeker) (*string, error) {
-	o, err := s.client.PutObjectWithContext(ctx, &s3.PutObjectInput{
+	o, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: new(s.bucketName),
 		Key:    new(key),
 		Body:   reader,
@@ -92,14 +43,17 @@ func (s *s3Client) Upload(ctx context.Context, key string, reader io.ReadSeeker)
 }
 
 func (s *s3Client) Download(ctx context.Context, key string) ([]byte, error) {
-	result, err := s.client.GetObjectWithContext(ctx, &s3.GetObjectInput{
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: new(s.bucketName),
 		Key:    new(key),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to download object: %w", err)
 	}
-	defer result.Body.Close()
+
+	defer func() {
+		_ = result.Body.Close()
+	}()
 
 	buf := &bytes.Buffer{}
 	_, err = io.Copy(buf, result.Body)
@@ -111,7 +65,7 @@ func (s *s3Client) Download(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (s *s3Client) Delete(ctx context.Context, key string) error {
-	_, err := s.client.DeleteObjectWithContext(ctx, &s3.DeleteObjectInput{
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: new(s.bucketName),
 		Key:    new(key),
 	})

@@ -16,6 +16,10 @@ import (
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/DimKa163/goph-profile/internal/worker/inbox"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	s3config "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/caarlos0/env"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -46,6 +50,10 @@ func main() {
 		logger.Fatal("failed to ping postgres", zap.Error(err))
 	}
 
+	s3Client, err := createS3Client(ctx, conf)
+	if err != nil {
+		logger.Fatal("failed to create S3 client", zap.Error(err))
+	}
 	n, err := os.Hostname()
 	if err != nil {
 		logger.Fatal("failed to get hostname", zap.Error(err))
@@ -67,17 +75,10 @@ func main() {
 	if err = client.Ping(ctx); err != nil {
 		logger.Fatal("failed to ping kafka client", zap.Error(err))
 	}
-	s3 := infra.NewS3(conf.Bucket,
-		infra.Region(conf.Region),
-		infra.Endpoint(conf.Endpoint),
-		infra.ForcePathStyle(),
-		infra.Credential(conf.AccessKey, conf.SecretKey, ""),
-		infra.UseSSL(conf.UseSSL),
-		infra.MaxRetries(3),
-	)
+	clientS3 := infra.NewS3(s3Client, conf.Bucket)
 	avatarRepo := infra.NewAvatarRepository(retryablePool)
-	uploadHandler := usecase.NewUploadHandler(avatarRepo, s3, img.NewCodec())
-	deleteHandler := usecase.NewDeleteHandler(avatarRepo, s3)
+	uploadHandler := usecase.NewUploadHandler(avatarRepo, clientS3, img.NewCodec())
+	deleteHandler := usecase.NewDeleteHandler(avatarRepo, clientS3)
 
 	w := inbox.AvatarUploadedEventWorker(ctx, inbox.Idempotency(infra.NewTX(retryablePool), infra.NewInboxRepo(retryablePool)),
 		func(ctx context.Context, eventType string) (usecase.InboxHandler, error) {
@@ -104,4 +105,23 @@ func createPg(ctx context.Context, conf config.GophInboxConfig) (*pgxpool.Pool, 
 		return nil, err
 	}
 	return p, nil
+}
+
+func createS3Client(ctx context.Context, conf config.GophInboxConfig) (*s3.Client, error) {
+	cfg, err := s3config.LoadDefaultConfig(
+		ctx,
+		s3config.WithRegion(conf.Region),
+		s3config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(conf.AccessKey, conf.SecretKey, ""),
+		),
+		s3config.WithRetryMaxAttempts(3),
+	)
+	if err != nil {
+		return nil, err
+	}
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(conf.Endpoint)
+		o.UsePathStyle = true // важно для MinIO
+	})
+	return client, nil
 }
