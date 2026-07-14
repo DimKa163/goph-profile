@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  GREETING: Hello, world!
+
+tasks:
+  go-test:
+    desc: "Run tests"
+    cmds:
+      - go test -v ./...
+
+  go-test-coverage:
+    desc: "Run tests"
+    cmds:
+      - go test ./... -coverprofile="coverage.out"
+      - go tool cover -func="coverage.out"
+      - rm coverage.out
+
+  default:
+    desc: Print a greeting message
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
