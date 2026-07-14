@@ -44,7 +44,10 @@ func (a *avatarController) Avatar(c echo.Context) error {
 	if err != nil {
 		return Error(c, err)
 	}
-	defer src.Close()
+
+	defer func() {
+		_ = src.Close()
+	}()
 
 	mimeType, err := readMimeType(src)
 	if err != nil {

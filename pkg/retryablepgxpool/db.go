@@ -79,7 +79,7 @@ func (r *Pool) Ping(ctx context.Context) error {
 
 func (r *Pool) Tx(ctx context.Context, h func(tx pgx.Tx) error, opts pgx.TxOptions) error {
 	return backoff.Retry(func() error {
-		tx, err := r.Pool.BeginTx(ctx, opts)
+		tx, err := r.BeginTx(ctx, opts)
 		if err != nil {
 			return retryableError(err)
 		}

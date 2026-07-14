@@ -18,6 +18,11 @@ tasks:
       - go tool cover -func="coverage.out"
       - rm coverage.out
 
+  go-lint:
+    desc: "Run golangci-lint"
+    cmds:
+      - golangci-lint run ./...
+
   default:
     desc: Print a greeting message
     cmds:

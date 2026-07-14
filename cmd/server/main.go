@@ -17,6 +17,10 @@ import (
 	"github.com/DimKa163/goph-profile/internal/shared/img"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	s3config "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/caarlos0/env"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -46,9 +50,13 @@ func main() {
 	if err = retryablePool.Ping(ctx); err != nil {
 		logger.Fatal("failed to ping postgres", zap.Error(err))
 	}
-	uc := rest.NewUserController(newUserService(conf, retryablePool))
-	ac := rest.NewAvatarController(newAvatarService(conf, retryablePool))
-	web := rest.NewWebController(newUserService(conf, retryablePool))
+	s3Client, err := createS3Client(ctx, conf)
+	if err != nil {
+		logger.Fatal("failed to create S3 client", zap.Error(err))
+	}
+	uc := rest.NewUserController(newUserService(conf, s3Client, retryablePool))
+	ac := rest.NewAvatarController(newAvatarService(conf, s3Client, retryablePool))
+	web := rest.NewWebController(newUserService(conf, s3Client, retryablePool))
 	if err = infra.Migrate(pgpool, "./migrations"); err != nil {
 		logger.Fatal("failed to migrate", zap.Error(err))
 	}
@@ -145,30 +153,35 @@ func createPg(ctx context.Context, conf config.GophConfig) (*pgxpool.Pool, error
 	return p, nil
 }
 
-func newAvatarService(conf config.GophConfig, pool *retryablepgxpool.Pool) *usecase.AvatarService {
+func newAvatarService(conf config.GophConfig, s3client *s3.Client, pool *retryablepgxpool.Pool) *usecase.AvatarService {
 	return usecase.NewAvatarService(infra.NewTX(pool), infra.NewAvatarRepository(pool),
 		infra.NewTaskRepository(pool),
-		infra.NewS3(conf.Bucket,
-			infra.Region(conf.Region),
-			infra.Endpoint(conf.Endpoint),
-			infra.ForcePathStyle(),
-			infra.Credential(conf.AccessKey, conf.SecretKey, ""),
-			infra.UseSSL(conf.UseSSL),
-			infra.MaxRetries(3),
-		),
+		infra.NewS3(s3client, conf.Bucket),
 		img.NewCodec())
 }
 
-func newUserService(conf config.GophConfig, pool *retryablepgxpool.Pool) *usecase.UserService {
+func newUserService(conf config.GophConfig, s3client *s3.Client, pool *retryablepgxpool.Pool) *usecase.UserService {
 	return usecase.NewUserService(infra.NewTX(pool), infra.NewAvatarRepository(pool),
-		infra.NewTaskRepository(pool), infra.NewS3(conf.Bucket,
-			infra.Region(conf.Region),
-			infra.Endpoint(conf.Endpoint),
-			infra.ForcePathStyle(),
-			infra.Credential(conf.AccessKey, conf.SecretKey, ""),
-			infra.UseSSL(conf.UseSSL),
-			infra.MaxRetries(3),
-		))
+		infra.NewTaskRepository(pool), infra.NewS3(s3client, conf.Bucket))
+}
+
+func createS3Client(ctx context.Context, conf config.GophConfig) (*s3.Client, error) {
+	cfg, err := s3config.LoadDefaultConfig(
+		ctx,
+		s3config.WithRegion(conf.Region),
+		s3config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(conf.AccessKey, conf.SecretKey, ""),
+		),
+		s3config.WithRetryMaxAttempts(3),
+	)
+	if err != nil {
+		return nil, err
+	}
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(conf.Endpoint)
+		o.UsePathStyle = true // важно для MinIO
+	})
+	return client, nil
 }
 
 type TemplateRenderer struct {

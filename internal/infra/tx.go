@@ -8,7 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-const txKey = "github.com/DimKa163/goph-profile_tx"
+type txContextKey struct{}
+
+var txKey = txContextKey{}
 
 type pool interface {
 	Exec(ctx context.Context, query string, args ...interface{}) (pgconn.CommandTag, error)
@@ -41,9 +43,9 @@ func (x *transactor) WithTx(ctx context.Context, fn func(context.Context) error)
 	}
 	defer func() {
 		if err != nil {
-			subTx.Rollback(ctx)
+			_ = subTx.Rollback(ctx)
 		} else {
-			subTx.Commit(ctx)
+			_ = subTx.Commit(ctx)
 		}
 	}()
 	if err = fn(context.WithValue(ctx, txKey, subTx)); err != nil {

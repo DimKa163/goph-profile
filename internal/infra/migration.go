@@ -17,7 +17,9 @@ func Migrate(pgx *pgxpool.Pool, migrationsDir string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		return err
@@ -26,7 +28,9 @@ func Migrate(pgx *pgxpool.Pool, migrationsDir string) error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func(m *migrate.Migrate) {
+		_, _ = m.Close()
+	}(m)
 	if err = m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
