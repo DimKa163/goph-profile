@@ -69,12 +69,13 @@ func TestGetShouldBeSuccessful(t *testing.T) {
 			S3Key:    "key",
 			MimeType: "image/jpeg",
 			ETag:     "tag",
+			Size:     entity.S300x300Size,
 		},
 	}, nil)
 	s3.EXPECT().Download(ctx, gomock.Any()).Return(file, nil)
 	sut := NewAvatarService(newTransactor(), repo, taskRepo, s3, codec)
 
-	e, f, err := sut.Get(ctx, eTag, &Request{ID: id})
+	e, f, err := sut.Get(ctx, eTag, &Request{ID: id, Format: "jpeg", Size: entity.S300x300Size})
 	require.NoError(t, err)
 	require.NotNil(t, e)
 	require.NotNil(t, f)
@@ -120,13 +121,15 @@ func TestGetShouldBeFailureWhenImageNotChanged(t *testing.T) {
 	file := []byte("file mother fucker")
 	repo.EXPECT().FindImage(ctx, id).Return([]*entity.Image{
 		{
-			ETag: eTag,
+			ETag:   eTag,
+			Format: "jpeg",
+			Size:   entity.S300x300Size,
 		},
 	}, nil)
 	s3.EXPECT().Download(ctx, s3Key).Return(file, nil).Times(0)
 	sut := NewAvatarService(newTransactor(), repo, taskRepo, s3, codec)
 
-	e, f, err := sut.Get(ctx, eTag, &Request{ID: id})
+	e, f, err := sut.Get(ctx, eTag, &Request{ID: id, Format: "jpeg", Size: entity.S300x300Size})
 
 	require.Nil(t, e)
 	require.Nil(t, f)

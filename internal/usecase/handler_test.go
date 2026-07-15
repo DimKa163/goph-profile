@@ -137,7 +137,7 @@ func TestUploadHandlerShouldBeFailedWhenUploadFailed(t *testing.T) {
 	codec.EXPECT().Thumbnail(orig, 300, 300).Return(img300)
 	codec.EXPECT().Encode(img300, "jpeg", 85).Return([]byte("thumb300"), nil)
 	uploadErr := errors.New("upload failed")
-	s3.EXPECT().Upload(ctx, gomock.Any(), gomock.Any()).Return(nil, uploadErr).AnyTimes()
+	s3.EXPECT().Upload(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, uploadErr).AnyTimes()
 
 	sut := NewUploadHandler(repo, s3, codec)
 	err := sut(ctx, ev.AvatarID, data)
@@ -214,7 +214,7 @@ func expectSuccessfulImageProcessing(
 		codec.EXPECT().Encode(img300, format, 85).Return([]byte("thumb300"), nil)
 	}
 	tag := "etag"
-	s3.EXPECT().Upload(ctx, gomock.Any(), gomock.Any()).Return(&tag, nil).Times(8)
+	s3.EXPECT().Upload(gomock.Any(), gomock.Any(), gomock.Any()).Return(&tag, nil).Times(8)
 }
 func TestDeleteHandlerShouldBeSuccessful(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -229,8 +229,8 @@ func TestDeleteHandlerShouldBeSuccessful(t *testing.T) {
 		S3Key:    []string{"key1", "key2"},
 	}
 	repo.EXPECT().DeleteImages(ctx, gomock.Any()).Return(nil)
-	s3.EXPECT().Delete(ctx, "key1").Return(nil)
-	s3.EXPECT().Delete(ctx, "key2").Return(nil)
+	s3.EXPECT().Delete(gomock.Any(), "key1").Return(nil)
+	s3.EXPECT().Delete(gomock.Any(), "key2").Return(nil)
 	sut := NewDeleteHandler(repo, s3)
 	data, _ := e.Bytes()
 	err := sut(ctx, e.AvatarID, data)
@@ -251,8 +251,9 @@ func TestDeleteHandlerShouldBeFailedWhenNoImages(t *testing.T) {
 		S3Key:    []string{"key1", "key2"},
 	}
 	repo.EXPECT().DeleteImages(ctx, gomock.Any()).Return(infra.ErrNoRows)
-	s3.EXPECT().Delete(ctx, "key1").Return(nil)
-	s3.EXPECT().Delete(ctx, "key2").Return(nil)
+	for _, k := range e.S3Key {
+		s3.EXPECT().Delete(gomock.Any(), k).Return(nil)
+	}
 	sut := NewDeleteHandler(repo, s3)
 	data, _ := e.Bytes()
 	err := sut(ctx, e.AvatarID, data)

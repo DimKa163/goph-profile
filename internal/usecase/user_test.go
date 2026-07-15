@@ -200,7 +200,7 @@ func TestDeleteUserAvatarShouldBeSuccessful(t *testing.T) {
 	e := createMetadata(userID)
 	repo.EXPECT().FindByUserID(ctx, userID).Return(e, nil)
 	repo.EXPECT().Delete(ctx, e.ID).Return(nil)
-	taskRepo.EXPECT().Insert(ctx, e.ID, entity.AvatarDeleted, gomock.Any()).Return(nil)
+	taskRepo.EXPECT().Insert(ctx, e.ID.String(), entity.AvatarDeleted, gomock.Any()).Return(nil)
 
 	sut := NewUserService(newTransactor(), repo, taskRepo, s3)
 
@@ -211,6 +211,7 @@ func TestDeleteUserAvatarShouldBeSuccessful(t *testing.T) {
 
 func createMetadata(userID entity.Email) *entity.Avatar {
 	return &entity.Avatar{
+		ID:     entity.NewAvatarID(),
 		UserID: userID,
 		Images: []*entity.Image{
 			{
