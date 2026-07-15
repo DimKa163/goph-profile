@@ -7,8 +7,10 @@ import (
 	"net/http"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
+	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
 )
 
 type avatarController struct {
@@ -29,19 +31,22 @@ func (a *avatarController) Register(e Section) {
 }
 
 func (a *avatarController) Avatar(c echo.Context) error {
-
+	logger := logging.Logger(c.Request().Context())
 	img, err := c.FormFile("image")
 	if err != nil {
+		logger.Error("error getting image", zap.Error(err))
 		return Error(c, err)
 	}
 
 	userID, err := entity.ParseEmail(c.Request().Header.Get("X-User-Id"))
 	if err != nil {
+		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	src, err := img.Open()
 	if err != nil {
+		logger.Error("error opening image", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -51,6 +56,7 @@ func (a *avatarController) Avatar(c echo.Context) error {
 
 	mimeType, err := readMimeType(src)
 	if err != nil {
+		logger.Error("error reading mime type", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -62,6 +68,7 @@ func (a *avatarController) Avatar(c echo.Context) error {
 		UserID:   userID,
 	})
 	if err != nil {
+		logger.Error("error uploading file", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -75,8 +82,10 @@ func (a *avatarController) Avatar(c echo.Context) error {
 }
 
 func (a *avatarController) Get(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
+		logger.Error("error parsing avatar id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -89,6 +98,7 @@ func (a *avatarController) Get(c echo.Context) error {
 		if errors.Is(err, usecase.ErrAvatarNotModified) {
 			return c.NoContent(http.StatusNotModified)
 		}
+		logger.Error("error getting avatar", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -99,30 +109,37 @@ func (a *avatarController) Get(c echo.Context) error {
 }
 
 func (a *avatarController) Delete(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
+		logger.Error("error parsing avatar id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	userID, err := entity.ParseEmail(c.Request().Header.Get("X-User-Id"))
 	if err != nil {
+		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	if err = a.service.Delete(c.Request().Context(), id, userID); err != nil {
+		logger.Error("error deleting avatar", zap.Error(err))
 		return Error(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
 
 func (a *avatarController) Metadata(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	avatarID, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
+		logger.Error("error parsing avatar id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	e, err := a.service.Metadata(c.Request().Context(), avatarID)
 	if err != nil {
+		logger.Error("error getting avatar metadata", zap.Error(err))
 		return Error(c, err)
 	}
 

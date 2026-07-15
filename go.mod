@@ -8,7 +8,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.29
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.105.1
 	github.com/beevik/guid v1.0.0
-	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/chai2010/webp v1.4.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -38,6 +37,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.1 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
+	github.com/caarlos0/env/v11 v11.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

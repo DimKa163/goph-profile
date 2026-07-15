@@ -5,8 +5,10 @@ import (
 	"net/http"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
+	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
 )
 
 type userController struct {
@@ -26,8 +28,10 @@ func (u *userController) Register(c Section) {
 }
 
 func (u *userController) Avatar(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
+		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -47,9 +51,11 @@ func (u *userController) Avatar(c echo.Context) error {
 			if errors.Is(err, usecase.ErrAvatarNotModified) {
 				return c.NoContent(http.StatusNotModified)
 			}
+			logger.Error("error with getting default avatar", zap.Error(err))
 			return Error(c, err)
 		}
 	default:
+		logger.Error("error with getting user avatar", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -57,7 +63,9 @@ func (u *userController) Avatar(c echo.Context) error {
 }
 
 func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
+	logger := logging.Logger(c.Request().Context())
 	if e == nil {
+		logger.Error("avatarBlob called with nil image")
 		return Error(c, entity.Error(entity.InternalErrorCode, "avatar image is empty"))
 	}
 
@@ -70,13 +78,16 @@ func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
 }
 
 func (u *userController) Avatars(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
+		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	list, err := u.userService.ListByUserID(c.Request().Context(), userID)
 	if err != nil {
+		logger.Error("error listing user's avatars", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -90,12 +101,15 @@ func (u *userController) Avatars(c echo.Context) error {
 }
 
 func (u *userController) Delete(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
+		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	if err = u.userService.Delete(c.Request().Context(), userID); err != nil {
+		logger.Error("error deleting user avatar", zap.Error(err))
 		return Error(c, err)
 	}
 

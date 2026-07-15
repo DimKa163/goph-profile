@@ -158,12 +158,12 @@ func retryableError(err error) error {
 
 func shouldRetry(pgErr *pgconn.PgError) bool {
 	switch pgErr.Code {
-	case pgerrcode.SerializationFailure:
-	case pgerrcode.DeadlockDetected:
-	case pgerrcode.TooManyConnections:
-	case pgerrcode.LockNotAvailable:
-	case pgerrcode.CannotConnectNow:
-	case pgerrcode.QueryCanceled:
+	case pgerrcode.SerializationFailure,
+		pgerrcode.DeadlockDetected,
+		pgerrcode.TooManyConnections,
+		pgerrcode.LockNotAvailable,
+		pgerrcode.CannotConnectNow,
+		pgerrcode.QueryCanceled:
 		return true
 	}
 	return false

@@ -20,7 +20,7 @@ import (
 	s3config "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/caarlos0/env"
+	"github.com/caarlos0/env/v11"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
@@ -68,6 +68,7 @@ func main() {
 		kgo.FetchMaxWait(100*time.Millisecond),
 		kgo.FetchMinBytes(1),
 		kgo.FetchMaxBytes(10*1024*1024),
+		kgo.RecordDeliveryTimeout(conf.DeliveryTimeout),
 	)
 	if err != nil {
 		logger.Fatal("failed to connect to kafka", zap.Error(err))
