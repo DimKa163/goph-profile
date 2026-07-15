@@ -25,6 +25,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
 )
 
@@ -36,29 +38,36 @@ func main() {
 	if err := env.Parse(&conf); err != nil {
 		panic(err)
 	}
-	logger, err := createLogger()
+
+	provider, sh, err := logging.NewLoggerProvider(
+		ctx,
+		semconv.ServiceNameKey.String("goph-server"),
+		semconv.ServiceVersionKey.String("1.0.0"),
+	)
 	if err != nil {
 		panic(err)
 	}
-	ctx = logging.SetLogger(ctx, logger)
+	defer sh()
+	log := createLogger("goph-server", provider)
+	ctx = logging.SetLogger(ctx, log)
 	pgpool, err := createPg(ctx, conf)
 	if err != nil {
-		logger.Fatal("failed to create postgres pool", zap.Error(err))
+		log.Fatal("failed to create postgres pool", zap.Error(err))
 	}
 	defer pgpool.Close()
 	retryablePool := retryablepgxpool.New(pgpool)
 	if err = retryablePool.Ping(ctx); err != nil {
-		logger.Fatal("failed to ping postgres", zap.Error(err))
+		log.Fatal("failed to ping postgres", zap.Error(err))
 	}
 	s3Client, err := createS3Client(ctx, conf)
 	if err != nil {
-		logger.Fatal("failed to create S3 client", zap.Error(err))
+		log.Fatal("failed to create S3 client", zap.Error(err))
 	}
 	uc := rest.NewUserController(newUserService(conf, s3Client, retryablePool))
 	ac := rest.NewAvatarController(newAvatarService(conf, s3Client, retryablePool))
 	web := rest.NewWebController(newUserService(conf, s3Client, retryablePool))
 	if err = infra.Migrate(pgpool, "./migrations"); err != nil {
-		logger.Fatal("failed to migrate", zap.Error(err))
+		log.Fatal("failed to migrate", zap.Error(err))
 	}
 	e := echo.New()
 	e.Renderer = &TemplateRenderer{
@@ -76,7 +85,7 @@ func main() {
 		LogError:     true,
 		BeforeNextFunc: func(c echo.Context) {
 			req := c.Request()
-			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
+			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), log)))
 		},
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			fields := []zap.Field{
@@ -128,21 +137,21 @@ func main() {
 	}
 	go func() {
 		<-ctx.Done()
-		logger.Info("shutting down server...")
+		log.Info("shutting down server...")
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err = server.Shutdown(timeoutCtx); err != nil {
-			logger.Warn("failed to shutdown server", zap.Error(err))
+			log.Warn("failed to shutdown server", zap.Error(err))
 		}
-		logger.Info("server shutdown")
+		log.Info("server shutdown")
 	}()
 	if err = server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		e.Logger.Fatal(err)
 	}
 }
 
-func createLogger() (*zap.Logger, error) {
-	return zap.NewDevelopment()
+func createLogger(name string, provider *sdklog.LoggerProvider) *zap.Logger {
+	return logging.NewZap(name, provider)
 }
 
 func createPg(ctx context.Context, conf config.GophConfig) (*pgxpool.Pool, error) {
