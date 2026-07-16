@@ -1,0 +1,24 @@
+# .golangci.yml
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - errcheck
+    - unused
+    - revive
+    - gosec
+    - bodyclose
+    - noctx
+    - misspell
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
