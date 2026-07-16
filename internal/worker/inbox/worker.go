@@ -76,7 +76,6 @@ func AvatarUploadedEventWorker(ctx context.Context, h IdempotencyHandler, root R
 						return err
 					}
 					if err = handler(timeoutCtx, string(record.Key), record.Value); err != nil {
-						logger.Error("failed to handle event", zap.Error(err))
 						return err
 					}
 					return nil

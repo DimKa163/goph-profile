@@ -33,7 +33,6 @@ func Idempotency(tx Transactor, repo MessageRepo) IdempotencyHandler {
 		var eventType string
 		log := logging.Logger(ctx)
 		if err := validateRecord(record, &eventID, &eventType); err != nil {
-			log.Error("message validation error", zap.Error(err))
 			return err
 		}
 		log.Info("received message", zap.String("eventType", eventType))

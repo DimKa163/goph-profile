@@ -12,6 +12,8 @@ import (
 
 	"github.com/DimKa163/goph-profile/internal/entity/events/v1"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/logging"
+	"go.uber.org/zap"
 	_ "golang.org/x/image/webp"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
@@ -80,7 +82,10 @@ func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*en
 	}
 	images, err = s.repo.FindImage(ctx, req.ID)
 	if err != nil {
-		return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, req.ID, err)
+		if errors.Is(err, infra.ErrNoRows) {
+			return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, req.ID, err)
+		}
+		return nil, nil, entity.Error(entity.InternalErrorCode, req.ID, err)
 	}
 	idx := slices.IndexFunc(images, func(e *entity.Image) bool {
 		if req.Size != "" && e.Size != req.Size {
@@ -102,7 +107,7 @@ func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*en
 	}
 	src, err = s.s3.Download(ctx, e.S3Key)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, entity.Error(entity.InternalErrorCode, req.ID, err)
 	}
 	return e, src, nil
 }
@@ -126,8 +131,18 @@ func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.
 	s3Key := fmt.Sprintf("%s/%s/%s_%s", uc.UserID.String(), entityID.String(), entity.OriginalSize, uc.FileName)
 	tag, err := s.s3.Upload(ctx, s3Key, uc.Reader)
 	if err != nil {
-		return nil, err
+		return nil, entity.Error(entity.InternalErrorCode, "", err)
 	}
+
+	defer func() {
+		if err != nil {
+			logger := logging.Logger(ctx)
+			logger.Debug(" error occurred during transaction. trying to clean up storage")
+			if err = s.s3.Delete(ctx, s3Key); err != nil {
+				logger.Error("error occurred during cleaning storage", zap.Error(err))
+			}
+		}
+	}()
 
 	var e *entity.Avatar
 	if err = s.tx.WithTx(ctx, func(ctx context.Context) error {
@@ -154,7 +169,10 @@ func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.
 		ev := &events.AvatarUploadedEvent{
 			AvatarID: e.ID.String(),
 		}
-		b, _ := ev.Bytes()
+		b, err := ev.Bytes()
+		if err != nil {
+			return err
+		}
 		return s.taskRepo.Insert(ctx, e.ID.String(), entity.AvatarUploaded, b)
 	}); err != nil {
 		return nil, err
@@ -187,7 +205,10 @@ func (s *AvatarService) Delete(ctx context.Context, id entity.AvatarID, userID e
 			AvatarID: id.String(),
 			S3Key:    keys,
 		}
-		b, _ := ev.Bytes()
+		b, err := ev.Bytes()
+		if err != nil {
+			return err
+		}
 		return s.taskRepo.Insert(ctx, id.String(), entity.AvatarDeleted, b)
 	})
 }

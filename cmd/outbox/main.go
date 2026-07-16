@@ -13,7 +13,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/worker/outbox"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
-	"github.com/caarlos0/env"
+	"github.com/caarlos0/env/v11"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
@@ -40,9 +40,6 @@ func main() {
 	if err = retryablePool.Ping(ctx); err != nil {
 		logger.Fatal("failed to ping postgres", zap.Error(err))
 	}
-	if err != nil {
-		logger.Fatal("failed to create kafka client", zap.Error(err))
-	}
 	app := outbox.New(infra.NewTX(retryablePool), infra.NewTaskRepository(retryablePool))
 	if conf.Workers == 0 {
 		conf.Workers = runtime.GOMAXPROCS(0) * 4
@@ -51,7 +48,7 @@ func main() {
 		return newClient(conf)
 	})
 	defer producerPool.Close()
-	app.Start(logging.SetLogger(ctx, logger), producerPool.Producers(), conf.BatchSize, time.Duration(conf.WaitTime)*time.Second, 5000*time.Second)
+	app.Start(logging.SetLogger(ctx, logger), producerPool.Producers(), conf.BatchSize, conf.WaitTime, 1000*conf.WaitTime)
 }
 
 func createLogger() (*zap.Logger, error) {

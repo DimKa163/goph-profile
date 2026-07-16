@@ -8,8 +8,10 @@ import (
 
 type loggerKey struct{}
 
+var Key = loggerKey{}
+
 func Logger(ctx context.Context) *zap.Logger {
-	logger, ok := ctx.Value(loggerKey{}).(*zap.Logger)
+	logger, ok := ctx.Value(Key).(*zap.Logger)
 	if !ok || logger == nil {
 		return zap.NewNop()
 	}
@@ -17,5 +19,5 @@ func Logger(ctx context.Context) *zap.Logger {
 }
 
 func SetLogger(ctx context.Context, logger *zap.Logger) context.Context {
-	return context.WithValue(ctx, loggerKey{}, logger)
+	return context.WithValue(ctx, Key, logger)
 }

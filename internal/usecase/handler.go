@@ -97,7 +97,11 @@ func convertToFormat(ctx context.Context, codec entity.ImageCodec, s3 entity.S3,
 	var buf []byte
 	var err error
 	var tag *string
-	mimeType, _ := shared.ContentType(format)
+
+	mimeType, err := shared.ContentType(format)
+	if err != nil {
+		return nil, err
+	}
 
 	switch size {
 	case entity.S300x300Size:

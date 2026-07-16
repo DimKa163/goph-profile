@@ -5,8 +5,10 @@ import (
 	"net/http"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
+	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
 )
 
 type Image struct {
@@ -35,14 +37,17 @@ func (w *webController) Index(c echo.Context) error {
 }
 
 func (w *webController) Gallery(c echo.Context) error {
+	logger := logging.Logger(c.Request().Context())
 	userIDStr := c.Param("userId")
 	userID, err := entity.ParseEmail(userIDStr)
 	if err != nil {
+		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 	avatars, err := w.userService.ListByUserID(c.Request().Context(), userID)
 	if err != nil {
-		return err
+		logger.Error("error getting user avatars", zap.Error(err))
+		return Error(c, err)
 	}
 	m := make([]*Image, len(avatars))
 	for i, avatar := range avatars {

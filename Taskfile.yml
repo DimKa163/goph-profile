@@ -23,6 +23,10 @@ tasks:
     cmds:
       - golangci-lint run ./...
 
+  go-fmt:
+    cmd:
+      go fmt ./...
+
   default:
     desc: Print a greeting message
     cmds:

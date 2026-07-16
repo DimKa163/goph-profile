@@ -16,6 +16,12 @@ type (
 )
 
 func Error(c echo.Context, err error) error {
+	if errors.Is(err, http.ErrMissingFile) {
+		return c.JSON(http.StatusBadRequest, ServiceError{
+			Message: err.Error(),
+		})
+	}
+
 	pe, ok := errors.AsType[*entity.ProfileError](err)
 	if ok {
 		switch pe.Code {
@@ -49,19 +55,13 @@ func Error(c echo.Context, err error) error {
 				Message: pe.Message,
 				Code:    pe.Code.String(),
 			})
-		case entity.InternalErrorCode:
+		default:
 			return c.JSON(http.StatusInternalServerError, ServiceError{
-				Message: pe.Message,
-				Code:    pe.Code.String(),
+				Code: entity.InternalErrorCode.String(),
 			})
 		}
 	}
-	if errors.Is(err, http.ErrMissingFile) {
-		return c.JSON(http.StatusBadRequest, ServiceError{
-			Message: err.Error(),
-		})
-	}
 	return c.JSON(http.StatusInternalServerError, ServiceError{
-		Message: err.Error(),
+		Code: entity.InternalErrorCode.String(),
 	})
 }
