@@ -2,12 +2,15 @@ package infra
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -23,9 +26,10 @@ const (
 									ORDER BY created_at ASC
 									LIMIT $2 FOR UPDATE SKIP LOCKED
 								)
-								RETURNING id, type, content, record_id;`
-	InsertForProcessingStmt = `INSERT INTO tasks (id, type, content, record_id) VALUES ($1, $2, $3, $4) ON CONFLICT(id) DO NOTHING;`
-	MarkProcessingStmt      = `UPDATE tasks
+								RETURNING id, type, content, record_id, traceparent, tracestate;`
+	InsertForProcessingStmt = `INSERT INTO tasks (id, type, content, record_id, traceparent, tracestate) 
+								VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO NOTHING;`
+	MarkProcessingStmt = `UPDATE tasks
 							SET status = 'completed', updated_at = now()
 							WHERE id = ANY($1::text[])`
 	MarkProcessingFailedStmt = `UPDATE tasks
@@ -55,8 +59,22 @@ func (r *taskRepository) GetAll(ctx context.Context, ttl time.Duration, limit in
 	tasks := make([]*entity.Task, 0, limit)
 	for rows.Next() {
 		var t entity.Task
-		if err = rows.Scan(&t.ID, &t.Type, &t.Content, &t.RecordID); err != nil {
+		var traceParent, traceState sql.NullString
+		if err = rows.Scan(
+			&t.ID,
+			&t.Type,
+			&t.Content,
+			&t.RecordID,
+			&traceParent,
+			&traceState,
+		); err != nil {
 			return nil, err
+		}
+		if traceParent.Valid {
+			t.TraceParent = traceParent.String
+		}
+		if traceState.Valid {
+			t.TraceState = traceState.String
 		}
 		tasks = append(tasks, &t)
 	}
@@ -68,7 +86,18 @@ func (r *taskRepository) GetAll(ctx context.Context, ttl time.Duration, limit in
 
 func (r *taskRepository) Insert(ctx context.Context, id string, t entity.TaskType, content []byte) error {
 	c := getCon(ctx, r.pool)
-	_, err := c.Exec(ctx, InsertForProcessingStmt, fmt.Sprintf("%s:%s", t, id), t.String(), content, id)
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	_, err := c.Exec(
+		ctx,
+		InsertForProcessingStmt,
+		fmt.Sprintf("%s:%s", t, id),
+		t.String(),
+		content,
+		id,
+		carrier.Get("traceparent"),
+		carrier.Get("tracestate"),
+	)
 	if err != nil {
 		return err
 	}

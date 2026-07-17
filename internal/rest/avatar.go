@@ -10,6 +10,8 @@ import (
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +33,8 @@ func (a *avatarController) Register(e Section) {
 }
 
 func (a *avatarController) Avatar(c echo.Context) error {
+	span := trace.SpanFromContext(c.Request().Context())
+	span.AddEvent("avatar received")
 	logger := logging.Logger(c.Request().Context())
 	img, err := c.FormFile("image")
 	if err != nil {
@@ -59,7 +63,10 @@ func (a *avatarController) Avatar(c echo.Context) error {
 		logger.Error("error reading mime type", zap.Error(err))
 		return Error(c, err)
 	}
-
+	span.SetAttributes(
+		attribute.String("user_id", userID.String()),
+		attribute.String("mime_type", mimeType),
+	)
 	e, err := a.service.Upload(c.Request().Context(), &usecase.UploadCommand{
 		Reader:   src,
 		FileName: img.Filename,

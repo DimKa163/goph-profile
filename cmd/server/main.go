@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -22,9 +23,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/caarlos0/env/v11"
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
@@ -48,8 +52,28 @@ func main() {
 		panic(err)
 	}
 	defer sh()
+
 	log := createLogger("goph-server", provider)
 	ctx = logging.SetLogger(ctx, log)
+
+	cl, err := logging.InitMetricProvider(
+		ctx,
+		semconv.ServiceNameKey.String("goph-server"),
+		semconv.ServiceVersionKey.String("1.0.0"),
+	)
+	if err != nil {
+		log.Fatal("Failed to initialize metric provider", zap.Error(err))
+	}
+	defer cl()
+	d, err := logging.NewTracerProvider(
+		ctx,
+		semconv.ServiceNameKey.String("goph-server"),
+		semconv.ServiceVersionKey.String("1.0.0"),
+	)
+	if err != nil {
+		log.Fatal("Failed to initialize tracer", zap.Error(err))
+	}
+	defer d()
 	pgpool, err := createPg(ctx, conf)
 	if err != nil {
 		log.Fatal("failed to create postgres pool", zap.Error(err))
@@ -74,6 +98,15 @@ func main() {
 		Templates: template.Must(template.ParseGlob("web/static/*.html")),
 	}
 	e.Use(middleware.Recover())
+	e.Use(middleware.RequestID())
+	e.Use(otelecho.Middleware(
+		"goph-server",
+		otelecho.WithTracerProvider(otel.GetTracerProvider()),
+		otelecho.WithMeterProvider(otel.GetMeterProvider()),
+		otelecho.WithSkipper(func(c echo.Context) bool {
+			return c.Path() == "/health"
+		}),
+	))
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:       true,
 		LogStatus:    true,
@@ -155,23 +188,32 @@ func createLogger(name string, provider *sdklog.LoggerProvider) *zap.Logger {
 }
 
 func createPg(ctx context.Context, conf config.GophConfig) (*pgxpool.Pool, error) {
-	p, err := pgxpool.New(ctx, conf.Database)
+	cfg, err := pgxpool.ParseConfig(conf.Database)
 	if err != nil {
 		return nil, err
 	}
-	return p, nil
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect postgres: %w", err)
+	}
+
+	if err = otelpgx.RecordStats(pool); err != nil {
+		return nil, fmt.Errorf("record pg stats: %w", err)
+	}
+	return pool, nil
 }
 
 func newAvatarService(conf config.GophConfig, s3client *s3.Client, pool *retryablepgxpool.Pool) *usecase.AvatarService {
 	return usecase.NewAvatarService(infra.NewTX(pool), infra.NewAvatarRepository(pool),
 		infra.NewTaskRepository(pool),
-		infra.NewS3(s3client, conf.Bucket),
+		infra.NewS3(otel.Tracer("s3"), s3client, conf.Bucket),
 		img.NewCodec())
 }
 
 func newUserService(conf config.GophConfig, s3client *s3.Client, pool *retryablepgxpool.Pool) *usecase.UserService {
 	return usecase.NewUserService(infra.NewTX(pool), infra.NewAvatarRepository(pool),
-		infra.NewTaskRepository(pool), infra.NewS3(s3client, conf.Bucket))
+		infra.NewTaskRepository(pool), infra.NewS3(otel.Tracer("s3"), s3client, conf.Bucket))
 }
 
 func createS3Client(ctx context.Context, conf config.GophConfig) (*s3.Client, error) {

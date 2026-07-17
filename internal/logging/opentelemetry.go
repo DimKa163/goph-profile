@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -16,8 +17,15 @@ import (
 )
 
 func NewLoggerProvider(ctx context.Context, attr ...attr.KeyValue) (*sdklog.LoggerProvider, func(), error) {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		return nil, nil, fmt.Errorf("OTEL_EXPORTER_OTLP_ENDPOINT not set")
+	}
+
 	exporter, err := otlploggrpc.New(
 		ctx,
+		otlploggrpc.WithEndpoint(endpoint),
+		otlploggrpc.WithInsecure(),
 	)
 	if err != nil {
 		return nil, nil, err
@@ -33,6 +41,11 @@ func NewLoggerProvider(ctx context.Context, attr ...attr.KeyValue) (*sdklog.Logg
 		resource.WithAttributes(
 			attr...,
 		),
+		resource.WithOS(),
+		resource.WithHost(),
+		resource.WithProcess(),
+		resource.WithContainer(),
+		resource.WithContainerID(),
 	)
 	if err != nil {
 		return nil, nil, err
@@ -42,12 +55,14 @@ func NewLoggerProvider(ctx context.Context, attr ...attr.KeyValue) (*sdklog.Logg
 		sdklog.WithResource(res),
 		sdklog.WithProcessor(processor),
 	)
+
 	shutdown := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := provider.Shutdown(ctx); err != nil {
 			otel.Handle(err)
 		}
+
 	}
 	return provider, shutdown, nil
 }

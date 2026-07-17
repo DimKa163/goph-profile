@@ -23,7 +23,8 @@ services:
       GOPH_BROKERS: kafka:9092
       OTEL_SERVICE_NAME: goph-server
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_EXPORTER_OTLP_INSECURE: "true"
 
   goph-outbox:
@@ -36,9 +37,10 @@ services:
     environment:
       GOPH_DATABASE: postgres://dev:dev@psql:5432/goph?sslmode=disable
       GOPH_BROKERS: kafka:9092
-      OTEL_SERVICE_NAME: myservice
+      OTEL_SERVICE_NAME: goph-outbox
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
       OTEL_EXPORTER_OTLP_INSECURE: "true"
     depends_on:
       - goph
@@ -61,9 +63,10 @@ services:
       GOPH_ACCESS_KEY: admin
       GOPH_SECRET_KEY: admin12345
       GOPH_USE_SSL: "false"
-      OTEL_SERVICE_NAME: myservice
+      OTEL_SERVICE_NAME: goph-inbox
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_EXPORTER_OTLP_INSECURE: "true"
     depends_on:
       - goph
@@ -153,6 +156,7 @@ services:
     container_name: otel-collector
     ports:
       - "4317:4317"
+      - "8889:8889"
       - "13133:13133"
     command:
       - "--config=/etc/otel-collector-config.yml"
@@ -160,6 +164,8 @@ services:
       - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
     depends_on:
       - loki
+      - prometheus
+      - jaeger
     restart: unless-stopped
 
   loki:
@@ -184,7 +190,29 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - loki
+      - prometheus
     restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - '9090:9090'
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    ports:
+      - '9100:9100'
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    restart: always
+    ports:
+      - '16686:16686'
 
 volumes:
   psql:

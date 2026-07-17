@@ -9,6 +9,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/plugin/kotel"
 	"go.uber.org/zap"
 )
 
@@ -19,7 +20,7 @@ type failedResult struct {
 	Record *kgo.Record
 }
 
-func AvatarUploadedEventWorker(ctx context.Context, h IdempotencyHandler, root RootHandler, cl *kgo.Client) func() error {
+func AvatarUploadedEventWorker(ctx context.Context, tracer *kotel.Tracer, h IdempotencyHandler, root RootHandler, cl *kgo.Client) func() error {
 	logger := logging.Logger(ctx)
 	clientID := cl.OptValue("ClientID").(string)
 	return func() error {
@@ -54,7 +55,8 @@ func AvatarUploadedEventWorker(ctx context.Context, h IdempotencyHandler, root R
 			failed := make([]failedResult, 0)
 			for !iter.Done() {
 				record := iter.Next()
-				ctx := logging.SetLogger(
+				ctx, span := tracer.WithProcessSpan(record)
+				ctx = logging.SetLogger(
 					ctx,
 					logger.With(zap.String(
 						"topic",
@@ -80,6 +82,7 @@ func AvatarUploadedEventWorker(ctx context.Context, h IdempotencyHandler, root R
 					}
 					return nil
 				}); err != nil && !errors.Is(err, ErrAlreadyProcessed) {
+					span.RecordError(err)
 					failed = append(failed, failedResult{
 						Err:    err,
 						Record: record,
@@ -87,6 +90,7 @@ func AvatarUploadedEventWorker(ctx context.Context, h IdempotencyHandler, root R
 					continue
 				}
 				suc = append(suc, record)
+				span.End()
 			}
 			if len(suc) > 0 {
 				if err := cl.CommitRecords(ctx, suc...); err != nil {

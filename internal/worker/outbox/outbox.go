@@ -8,6 +8,8 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -27,12 +29,14 @@ type TypeHandler func(ctx context.Context, key []byte, buffer []byte, headers ..
 type RootHandler func(t entity.TaskType) (TypeHandler, error)
 
 type outboxImpl struct {
+	tracer     trace.Tracer
 	transactor Transactor
 	taskRepo   entity.TaskRepository
 }
 
-func New(tx Transactor, taskRepo entity.TaskRepository) *outboxImpl {
+func New(tracer trace.Tracer, tx Transactor, taskRepo entity.TaskRepository) *outboxImpl {
 	return &outboxImpl{
+		tracer:     tracer,
 		transactor: tx,
 		taskRepo:   taskRepo,
 	}
@@ -58,6 +62,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			ctx, span := o.tracer.Start(ctx, "outbox read tasks", trace.WithSpanKind(trace.SpanKindServer))
 			logger := logging.Logger(ctx)
 			if err := o.transactor.WithTx(ctx, func(ctx context.Context) error {
 				m, err := o.taskRepo.GetAll(ctx, ttl, batchSize)
@@ -72,6 +77,11 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 				succeed := make([]string, 0, len(m))
 				failed := make([]taskErrorDescription, 0)
 				for _, task := range m {
+					ctx := task.Trace(ctx)
+					ctx, taskSpan := o.tracer.Start(ctx, "outbox publish", trace.WithSpanKind(trace.SpanKindProducer))
+					taskSpan.SetAttributes(
+						attribute.String("kind", task.Type.String()),
+					)
 					if err = producer.Produce(ctx, &kafka.Message{
 						Topic:       "avatar",
 						Key:         []byte(task.RecordID),
@@ -88,6 +98,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						continue
 					}
 					succeed = append(succeed, task.ID)
+					span.End()
 				}
 
 				if len(succeed) > 0 {
@@ -107,7 +118,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 			}); err != nil {
 				logger.Error("outbox iteration failed", zap.Error(err))
 			}
-
+			span.End()
 		}
 	}
 }

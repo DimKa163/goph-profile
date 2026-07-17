@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type TaskStatus int
@@ -79,14 +82,24 @@ func (t *TaskType) Scan(value any) error {
 }
 
 type Task struct {
-	ID        string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Type      TaskType
-	Status    TaskStatus
-	Content   []byte
-	RecordID  string
-	Error     string
+	ID          string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Type        TaskType
+	Status      TaskStatus
+	Content     []byte
+	RecordID    string
+	Error       string
+	TraceParent string
+	TraceState  string
+}
+
+func (t *Task) Trace(ctx context.Context) context.Context {
+	carrier := propagation.MapCarrier{
+		"traceparent": t.TraceParent,
+		"tracestate":  t.TraceState,
+	}
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 
 //go:generate mockgen -source=task.go -destination=mocks/mock_task.go -package=mocks

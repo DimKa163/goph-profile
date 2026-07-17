@@ -32,6 +32,6 @@ type GophOutboxConfig struct {
 	BatchMaxSize    int           `env:"GOPH_BATCH_MAX_SIZE" envDefault:"1024"`
 	DeliveryTimeout time.Duration `env:"GOPH_DELIVERY_TIMEOUT" envDefault:"10s"`
 	BatchSize       int           `env:"GOPH_BATCH_SIZE" envDefault:"100"`
-	WaitTime        time.Duration `env:"GOPH_WAIT_TIME" envDefault:"10"`
+	WaitTime        time.Duration `env:"GOPH_WAIT_TIME" envDefault:"10s"`
 	Workers         int           `env:"GOPH_WORKERS" envDefault:"0"`
 }

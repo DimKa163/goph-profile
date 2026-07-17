@@ -21,8 +21,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/caarlos0/env/v11"
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/plugin/kotel"
+	"go.opentelemetry.io/otel"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
 )
 
@@ -34,11 +39,36 @@ func main() {
 	if err := env.Parse(&conf); err != nil {
 		panic(err)
 	}
-	logger, err := createLogger()
+	provider, sh, err := logging.NewLoggerProvider(
+		ctx,
+		semconv.ServiceNameKey.String("goph-inbox"),
+		semconv.ServiceVersionKey.String("1.0.0"),
+	)
 	if err != nil {
 		panic(err)
 	}
+	defer sh()
+	logger := createLogger("goph-inbox", provider)
 	ctx = logging.SetLogger(ctx, logger)
+
+	cl, err := logging.InitMetricProvider(
+		ctx,
+		semconv.ServiceNameKey.String("goph-inbox"),
+		semconv.ServiceVersionKey.String("1.0.0"),
+	)
+	if err != nil {
+		logger.Fatal("Failed to initialize metric provider", zap.Error(err))
+	}
+	defer cl()
+	d, err := logging.NewTracerProvider(
+		ctx,
+		semconv.ServiceNameKey.String("goph-inbox"),
+		semconv.ServiceVersionKey.String("1.0.0"),
+	)
+	if err != nil {
+		logger.Fatal("Failed to initialize tracer", zap.Error(err))
+	}
+	defer d()
 	pgpool, err := createPg(ctx, conf)
 	if err != nil {
 		logger.Fatal("failed to create postgres pool", zap.Error(err))
@@ -58,6 +88,16 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to get hostname", zap.Error(err))
 	}
+
+	kotelTracer := kotel.NewTracer(
+		kotel.TracerProvider(otel.GetTracerProvider()),
+		kotel.TracerPropagator(otel.GetTextMapPropagator()),
+		kotel.ClientID(fmt.Sprintf("%s-%s", conf.Group, n)),
+		kotel.ConsumerGroup(conf.Group),
+	)
+	kotelService := kotel.NewKotel(
+		kotel.WithTracer(kotelTracer),
+	)
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(conf.Brokers),
 		kgo.ConsumerGroup(conf.Group),
@@ -69,6 +109,7 @@ func main() {
 		kgo.FetchMinBytes(1),
 		kgo.FetchMaxBytes(10*1024*1024),
 		kgo.RecordDeliveryTimeout(conf.DeliveryTimeout),
+		kgo.WithHooks(kotelService.Hooks()...),
 	)
 	if err != nil {
 		logger.Fatal("failed to connect to kafka", zap.Error(err))
@@ -76,12 +117,12 @@ func main() {
 	if err = client.Ping(ctx); err != nil {
 		logger.Fatal("failed to ping kafka client", zap.Error(err))
 	}
-	clientS3 := infra.NewS3(s3Client, conf.Bucket)
+	clientS3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
 	avatarRepo := infra.NewAvatarRepository(retryablePool)
 	uploadHandler := usecase.NewUploadHandler(avatarRepo, clientS3, img.NewCodec())
 	deleteHandler := usecase.NewDeleteHandler(avatarRepo, clientS3)
 
-	w := inbox.AvatarUploadedEventWorker(ctx, inbox.Idempotency(infra.NewTX(retryablePool), infra.NewInboxRepo(retryablePool)),
+	w := inbox.AvatarUploadedEventWorker(ctx, kotelTracer, inbox.Idempotency(infra.NewTX(retryablePool), infra.NewInboxRepo(retryablePool)),
 		func(ctx context.Context, eventType string) (usecase.InboxHandler, error) {
 			switch eventType {
 			case entity.AvatarUploaded.String():
@@ -96,16 +137,25 @@ func main() {
 	}
 }
 
-func createLogger() (*zap.Logger, error) {
-	return zap.NewDevelopment()
+func createLogger(name string, provider *sdklog.LoggerProvider) *zap.Logger {
+	return logging.NewZap(name, provider)
 }
 
 func createPg(ctx context.Context, conf config.GophInboxConfig) (*pgxpool.Pool, error) {
-	p, err := pgxpool.New(ctx, conf.Database)
+	cfg, err := pgxpool.ParseConfig(conf.Database)
 	if err != nil {
 		return nil, err
 	}
-	return p, nil
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect postgres: %w", err)
+	}
+
+	if err = otelpgx.RecordStats(pool); err != nil {
+		return nil, fmt.Errorf("record pg stats: %w", err)
+	}
+	return pool, nil
 }
 
 func createS3Client(ctx context.Context, conf config.GophInboxConfig) (*s3.Client, error) {

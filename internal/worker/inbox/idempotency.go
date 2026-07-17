@@ -9,6 +9,8 @@ import (
 	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -36,6 +38,16 @@ func Idempotency(tx Transactor, repo MessageRepo) IdempotencyHandler {
 			return err
 		}
 		log.Info("received message", zap.String("eventType", eventType))
+		span := trace.SpanFromContext(ctx)
+		span.AddEvent("avatar received")
+		span.SetAttributes(
+			attribute.String("client_id", clientID),
+			attribute.String("topic", record.Topic),
+			attribute.Int("partition", int(record.Partition)),
+			attribute.Int("offset", int(record.Offset)),
+			attribute.String("event_id", eventID),
+			attribute.String("event_type", eventType),
+		)
 		now := time.Now()
 		defer func() {
 			duration := time.Since(now)
