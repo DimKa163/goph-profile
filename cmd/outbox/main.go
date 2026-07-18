@@ -6,15 +6,19 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+var (
+	Name      string
+	Version   string
+	BuildDate string
+	Commit    string
+)
+
 func main() {
 	var conf config.GophConfig
 	if err := env.Parse(&conf); err != nil {
 		panic(err)
 	}
-	name := "goph-outbox"
-	version := "1.0.0"
-	buildDate := "1970-01-01T00:00:00Z"
-	if err := app.RunOutbox(conf, name, version, buildDate); err != nil {
+	if err := app.RunOutbox(conf, Name, Version, BuildDate); err != nil {
 		panic(err)
 	}
 }
