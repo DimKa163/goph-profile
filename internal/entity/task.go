@@ -95,10 +95,18 @@ type Task struct {
 }
 
 func (t *Task) Trace(ctx context.Context) context.Context {
+	if t.TraceParent == "" {
+		return ctx
+	}
+
 	carrier := propagation.MapCarrier{
 		"traceparent": t.TraceParent,
-		"tracestate":  t.TraceState,
 	}
+
+	if t.TraceState != "" {
+		carrier.Set("tracestate", t.TraceState)
+	}
+
 	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 

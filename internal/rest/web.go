@@ -28,12 +28,12 @@ func NewWebController(userServices *usecase.UserService) *webController {
 }
 
 func (w *webController) Register(e Section) {
-	e.GET("/web/upload", w.Index)
-	e.GET("/web/gallery/:userId", w.Gallery)
+	e.GET("/server/upload", w.Index)
+	e.GET("/server/gallery/:userId", w.Gallery)
 }
 
 func (w *webController) Index(c echo.Context) error {
-	return c.File("web/static/index.html")
+	return c.File("server/static/index.html")
 }
 
 func (w *webController) Gallery(c echo.Context) error {

@@ -62,7 +62,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ctx, span := o.tracer.Start(ctx, "outbox read tasks", trace.WithSpanKind(trace.SpanKindServer))
+			ctx, span := o.tracer.Start(ctx, "outbox read tasks")
 			logger := logging.Logger(ctx)
 			if err := o.transactor.WithTx(ctx, func(ctx context.Context) error {
 				m, err := o.taskRepo.GetAll(ctx, ttl, batchSize)
@@ -90,6 +90,8 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						EventID:     task.ID,
 						TaskType:    task.Type,
 					}); err != nil {
+						taskSpan.RecordError(err)
+						taskSpan.End()
 						logger.Error("failed to produce", zap.Error(err))
 						failed = append(failed, taskErrorDescription{
 							Error: err,
@@ -98,7 +100,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						continue
 					}
 					succeed = append(succeed, task.ID)
-					span.End()
+					taskSpan.End()
 				}
 
 				if len(succeed) > 0 {

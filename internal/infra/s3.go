@@ -26,6 +26,8 @@ func NewS3(tracer trace.Tracer, client *s3.Client, bucket string) *s3Client {
 	}
 }
 func (s *s3Client) Check(ctx context.Context) error {
+	ctx, span := s.tracer.Start(ctx, "s3Client.Check", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
 	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: new(s.bucketName),
 	})

@@ -35,6 +35,20 @@ func (m *MockS3) EXPECT() *MockS3MockRecorder {
 	return m.recorder
 }
 
+// Check mocks base method.
+func (m *MockS3) Check(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Check", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Check indicates an expected call of Check.
+func (mr *MockS3MockRecorder) Check(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockS3)(nil).Check), ctx)
+}
+
 // Delete mocks base method.
 func (m *MockS3) Delete(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()
