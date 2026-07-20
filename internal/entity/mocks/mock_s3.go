@@ -6,9 +6,9 @@ package mocks
 
 import (
 	context "context"
-	io "io"
 	reflect "reflect"
 
+	entity "github.com/DimKa163/goph-profile/internal/entity"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -50,45 +50,45 @@ func (mr *MockS3MockRecorder) Check(ctx interface{}) *gomock.Call {
 }
 
 // Delete mocks base method.
-func (m *MockS3) Delete(ctx context.Context, key string) error {
+func (m *MockS3) Delete(ctx context.Context, userID entity.Email, key string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret := m.ctrl.Call(m, "Delete", ctx, userID, key)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockS3MockRecorder) Delete(ctx, key interface{}) *gomock.Call {
+func (mr *MockS3MockRecorder) Delete(ctx, userID, key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockS3)(nil).Delete), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockS3)(nil).Delete), ctx, userID, key)
 }
 
 // Download mocks base method.
-func (m *MockS3) Download(ctx context.Context, key string) ([]byte, error) {
+func (m *MockS3) Download(ctx context.Context, userID entity.Email, key string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Download", ctx, key)
+	ret := m.ctrl.Call(m, "Download", ctx, userID, key)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Download indicates an expected call of Download.
-func (mr *MockS3MockRecorder) Download(ctx, key interface{}) *gomock.Call {
+func (mr *MockS3MockRecorder) Download(ctx, userID, key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Download", reflect.TypeOf((*MockS3)(nil).Download), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Download", reflect.TypeOf((*MockS3)(nil).Download), ctx, userID, key)
 }
 
 // Upload mocks base method.
-func (m *MockS3) Upload(ctx context.Context, key string, reader io.ReadSeeker) (*string, error) {
+func (m *MockS3) Upload(ctx context.Context, userID entity.Email, key string, data []byte) (*string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upload", ctx, key, reader)
+	ret := m.ctrl.Call(m, "Upload", ctx, userID, key, data)
 	ret0, _ := ret[0].(*string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Upload indicates an expected call of Upload.
-func (mr *MockS3MockRecorder) Upload(ctx, key, reader interface{}) *gomock.Call {
+func (mr *MockS3MockRecorder) Upload(ctx, userID, key, data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockS3)(nil).Upload), ctx, key, reader)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockS3)(nil).Upload), ctx, userID, key, data)
 }

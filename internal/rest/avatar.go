@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/labstack/echo/v4"
 	"go.opentelemetry.io/otel/attribute"
@@ -16,11 +18,13 @@ import (
 )
 
 type avatarController struct {
+	metric  observability.MetricService
 	service *usecase.AvatarService
 }
 
-func NewAvatarController(service *usecase.AvatarService) *avatarController {
+func NewAvatarController(metric observability.MetricService, service *usecase.AvatarService) *avatarController {
 	return &avatarController{
+		metric:  metric,
 		service: service,
 	}
 }
@@ -34,7 +38,6 @@ func (a *avatarController) Register(e Section) {
 
 func (a *avatarController) Avatar(c echo.Context) error {
 	span := trace.SpanFromContext(c.Request().Context())
-	span.AddEvent("avatar received")
 	logger := logging.Logger(c.Request().Context())
 	img, err := c.FormFile("image")
 	if err != nil {
@@ -47,13 +50,11 @@ func (a *avatarController) Avatar(c echo.Context) error {
 		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
-
 	src, err := img.Open()
 	if err != nil {
 		logger.Error("error opening image", zap.Error(err))
 		return Error(c, err)
 	}
-
 	defer func() {
 		_ = src.Close()
 	}()
@@ -63,18 +64,32 @@ func (a *avatarController) Avatar(c echo.Context) error {
 		logger.Error("error reading mime type", zap.Error(err))
 		return Error(c, err)
 	}
+	startTime := time.Now()
+	status := observability.Success
+	defer func() {
+		since := time.Since(startTime)
+		a.metric.AvatarUploaded(c.Request().Context(), userID, status)
+		a.metric.AvatarUploadDuration(c.Request().Context(), status, since)
+	}()
 	span.SetAttributes(
 		attribute.String("user_id", userID.String()),
 		attribute.String("mime_type", mimeType),
+		attribute.Int64("file_size", img.Size),
 	)
+	buf, size, err := readToBuffer(src)
+	if err != nil {
+		logger.Error("error reading file", zap.Error(err))
+		return Error(c, err)
+	}
 	e, err := a.service.Upload(c.Request().Context(), &usecase.UploadCommand{
-		Reader:   src,
+		Buf:      buf,
 		FileName: img.Filename,
 		MimeType: mimeType,
-		Size:     img.Size,
+		Size:     size,
 		UserID:   userID,
 	})
 	if err != nil {
+		status = observability.Failure
 		logger.Error("error uploading file", zap.Error(err))
 		return Error(c, err)
 	}
@@ -186,4 +201,17 @@ func readMimeType(r io.ReadSeeker) (string, error) {
 	mimeType := http.DetectContentType(buf[:n])
 	_, _ = r.Seek(0, io.SeekStart)
 	return mimeType, nil
+}
+
+func readToBuffer(rs io.ReadSeeker) ([]byte, int64, error) {
+	if _, err := rs.Seek(0, io.SeekStart); err != nil {
+		return nil, 0, err
+	}
+
+	buf, err := io.ReadAll(rs)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return buf, int64(len(buf)), nil
 }

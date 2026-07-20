@@ -9,6 +9,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/infra"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/shared/img"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/DimKa163/goph-profile/internal/worker/inbox"
@@ -35,6 +36,12 @@ func RunInbox(conf config.GophConfig, name, version, buildDate string) error {
 		s3Client, err := conf.CreateS3(ctx)
 		if err != nil {
 			logger.Fatal("failed to get hostname", zap.Error(err))
+			return err
+		}
+
+		metricService, err := observability.NewMetricService(name)
+		if err != nil {
+			logger.Fatal("failed to create metric service", zap.Error(err))
 			return err
 		}
 
@@ -80,7 +87,11 @@ func RunInbox(conf config.GophConfig, name, version, buildDate string) error {
 			zap.Bool("s3_use_ssl", conf.UseSSL),
 			zap.Bool("database_configured", conf.Database != ""),
 		)
-		consumerHandler := inbox.AvatarUploadedEventWorker(ctx, kotelTracer, inbox.Idempotency(infra.NewTX(retryablePool), infra.NewInboxRepo(retryablePool)),
+		consumerHandler := inbox.AvatarUploadedEventWorker(ctx, kotelTracer, inbox.Idempotency(
+			infra.NewTX(retryablePool),
+			metricService,
+			infra.NewInboxRepo(retryablePool),
+		),
 			func(ctx context.Context, eventType string) (usecase.InboxHandler, error) {
 				switch eventType {
 				case entity.AvatarUploaded.String():

@@ -92,7 +92,14 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 					}); err != nil {
 						taskSpan.RecordError(err)
 						taskSpan.End()
-						logger.Error("failed to produce", zap.Error(err))
+						logger.Error(
+							"failed to produce",
+							zap.Error(err),
+							zap.String(
+								"task_id",
+								task.ID,
+							),
+						)
 						failed = append(failed, taskErrorDescription{
 							Error: err,
 							ID:    task.ID,

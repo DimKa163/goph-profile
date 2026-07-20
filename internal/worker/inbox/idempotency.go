@@ -8,6 +8,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/infra"
 	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -29,12 +30,29 @@ var ErrEventHeaderTypeMissing = errors.New("event header type missing")
 
 type IdempotencyHandler func(ctx context.Context, clientID string, record *kgo.Record, f func(ctx context.Context, kind string) error) error
 
-func Idempotency(tx Transactor, repo MessageRepo) IdempotencyHandler {
+func Idempotency(tx Transactor, metricService observability.MetricService, repo MessageRepo) IdempotencyHandler {
 	return func(ctx context.Context, clientID string, record *kgo.Record, f func(ctx context.Context, kind string) error) error {
 		var eventID string
 		var eventType string
+		var err error
 		log := logging.Logger(ctx)
-		if err := validateRecord(record, &eventID, &eventType); err != nil {
+		now := time.Now()
+		defer func() {
+			duration := time.Since(now)
+			log.Info("processed message",
+				zap.Duration("duration", duration),
+				zap.String("eventType", eventType),
+				zap.String("clientID", clientID),
+				zap.String("eventID", eventID),
+				zap.String("topic", record.Topic),
+			)
+			status := observability.Success
+			if err != nil {
+				status = observability.Failure
+			}
+			metricService.AvatarProcessingDuration(ctx, status, eventType, duration)
+		}()
+		if err = validateRecord(record, &eventID, &eventType); err != nil {
 			return err
 		}
 		log.Info("received message", zap.String("eventType", eventType))
@@ -48,11 +66,6 @@ func Idempotency(tx Transactor, repo MessageRepo) IdempotencyHandler {
 			attribute.String("event_id", eventID),
 			attribute.String("event_type", eventType),
 		)
-		now := time.Now()
-		defer func() {
-			duration := time.Since(now)
-			log.Info("processed message", zap.Duration("duration", duration), zap.String("eventType", eventType))
-		}()
 		return tx.WithTx(ctx, func(ctx context.Context) error {
 			if err := repo.Insert(ctx, eventID, clientID, record.Value); err != nil {
 				if errors.Is(err, infra.ErrNoRows) {

@@ -13,6 +13,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/infra"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/rest"
 	"github.com/DimKa163/goph-profile/internal/shared/img"
 	"github.com/DimKa163/goph-profile/internal/usecase"
@@ -21,6 +22,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -49,10 +51,22 @@ func RunServer(conf config.GophConfig, name, version, buildDate string) error {
 			return err
 		}
 
+		err = observability.UseStorageUsageObserver(name, retryablePool)
+		if err != nil {
+			log.Fatal("failed to create usage observer", zap.Error(err))
+			return err
+		}
+
+		metricService, err := observability.NewMetricService(name)
+		if err != nil {
+			log.Fatal("failed to create metric service", zap.Error(err))
+			return err
+		}
+
 		s3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
 
 		uc := rest.NewUserController(newUserService(s3, retryablePool))
-		ac := rest.NewAvatarController(newAvatarService(s3, retryablePool))
+		ac := rest.NewAvatarController(metricService, newAvatarService(s3, retryablePool))
 		web := rest.NewWebController(newUserService(s3, retryablePool))
 		e := echo.New()
 		e.Renderer = &TemplateRenderer{
@@ -80,12 +94,14 @@ func RunServer(conf config.GophConfig, name, version, buildDate string) error {
 			BeforeNextFunc: func(c echo.Context) {
 				logger := logging.Logger(ctx)
 				req := c.Request()
+				traceID := trace.SpanFromContext(req.Context()).SpanContext().TraceID()
 				fields := []zap.Field{
 					zap.String("method", c.Request().Method),
 					zap.String("uri", c.Request().RequestURI),
 					zap.String("remote_ip", c.RealIP()),
 					zap.String("host", c.Request().Host),
 					zap.String("user_agent", c.Request().UserAgent()),
+					zap.String("trace_id", traceID.String()),
 				}
 				logger = logger.With(fields...)
 				c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))

@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"bytes"
 	"context"
 	"image"
 	"testing"
@@ -63,16 +62,18 @@ func TestGetShouldBeSuccessful(t *testing.T) {
 	id := entity.NewAvatarID()
 	eTag := "eTag"
 	file := []byte("file mother fucker")
-	repo.EXPECT().FindImage(ctx, id).Return([]*entity.Image{
-		{
-			Format:   "jpeg",
-			S3Key:    "key",
-			MimeType: "image/jpeg",
-			ETag:     "tag",
-			Size:     entity.S300x300Size,
+	repo.EXPECT().Find(ctx, id).Return(&entity.Avatar{
+		Images: []*entity.Image{
+			{
+				Format:   "jpeg",
+				S3Key:    "key",
+				MimeType: "image/jpeg",
+				ETag:     "tag",
+				Size:     entity.S300x300Size,
+			},
 		},
 	}, nil)
-	s3.EXPECT().Download(ctx, gomock.Any()).Return(file, nil)
+	s3.EXPECT().Download(ctx, gomock.Any(), gomock.Any()).Return(file, nil)
 	sut := NewAvatarService(newTransactor(), repo, taskRepo, s3, codec)
 
 	e, f, err := sut.Get(ctx, eTag, &Request{ID: id, Format: "jpeg", Size: entity.S300x300Size})
@@ -93,8 +94,8 @@ func TestGetShouldBeFailureWhenMetaNotFound(t *testing.T) {
 	eTag := "eTag"
 	s3Key := "key"
 	file := []byte("file mother fucker")
-	repo.EXPECT().FindImage(ctx, id).Return(nil, infra.ErrNoRows)
-	s3.EXPECT().Download(ctx, s3Key).Return(file, nil).Times(0)
+	repo.EXPECT().Find(ctx, id).Return(nil, infra.ErrNoRows)
+	s3.EXPECT().Download(ctx, gomock.Any(), s3Key).Return(file, nil).Times(0)
 	sut := NewAvatarService(newTransactor(), repo, taskRepo, s3, codec)
 
 	e, f, err := sut.Get(ctx, eTag, &Request{ID: id})
@@ -119,14 +120,16 @@ func TestGetShouldBeFailureWhenImageNotChanged(t *testing.T) {
 	eTag := "eTag"
 	s3Key := "key"
 	file := []byte("file mother fucker")
-	repo.EXPECT().FindImage(ctx, id).Return([]*entity.Image{
-		{
-			ETag:   eTag,
-			Format: "jpeg",
-			Size:   entity.S300x300Size,
+	repo.EXPECT().Find(ctx, id).Return(&entity.Avatar{
+		Images: []*entity.Image{
+			{
+				ETag:   eTag,
+				Format: "jpeg",
+				Size:   entity.S300x300Size,
+			},
 		},
 	}, nil)
-	s3.EXPECT().Download(ctx, s3Key).Return(file, nil).Times(0)
+	s3.EXPECT().Download(ctx, gomock.Any(), s3Key).Return(file, nil).Times(0)
 	sut := NewAvatarService(newTransactor(), repo, taskRepo, s3, codec)
 
 	e, f, err := sut.Get(ctx, eTag, &Request{ID: id, Format: "jpeg", Size: entity.S300x300Size})
@@ -151,7 +154,7 @@ func TestUploadShouldHandleSpecificSize(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.png",
 				MimeType: "image/png",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   false,
 			ExpectedError: nil,
@@ -163,7 +166,7 @@ func TestUploadShouldHandleSpecificSize(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.png",
 				MimeType: "image/png",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   true,
 			ExpectedError: entity.ErrInvalidSize,
@@ -175,7 +178,7 @@ func TestUploadShouldHandleSpecificSize(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.png",
 				MimeType: "image/png",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   true,
 			ExpectedError: entity.ErrInvalidSize,
@@ -187,7 +190,7 @@ func TestUploadShouldHandleSpecificSize(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.png",
 				MimeType: "image/png",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   true,
 			ExpectedError: entity.ErrInvalidSize,
@@ -227,7 +230,7 @@ func TestUploadShouldHandleSpecificContentType(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.jpeg",
 				MimeType: "image/jpeg",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   false,
 			ExpectedError: nil,
@@ -239,7 +242,7 @@ func TestUploadShouldHandleSpecificContentType(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.png",
 				MimeType: "image/png",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   false,
 			ExpectedError: nil,
@@ -251,7 +254,7 @@ func TestUploadShouldHandleSpecificContentType(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.webp",
 				MimeType: "image/webp",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   false,
 			ExpectedError: nil,
@@ -263,7 +266,7 @@ func TestUploadShouldHandleSpecificContentType(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test.abc",
 				MimeType: "image/abc",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   true,
 			ExpectedError: entity.ErrInvalidContentErrorMessage,
@@ -275,7 +278,7 @@ func TestUploadShouldHandleSpecificContentType(t *testing.T) {
 				UserID:   entity.Email("user@user.com"),
 				FileName: "test",
 				MimeType: "",
-				Reader:   bytes.NewReader([]byte("test")),
+				Buf:      []byte("test"),
 			},
 			ErrExpected:   true,
 			ExpectedError: entity.ErrInvalidContentErrorMessage,
@@ -385,7 +388,7 @@ func createSut(ctrl *gomock.Controller, ctx context.Context, command *UploadComm
 	s3 := mocks.NewMockS3(ctrl)
 	codec := mocks.NewMockImageCodec(ctrl)
 
-	codec.EXPECT().DecodeConfig(command.Reader).Return(image.Config{
+	codec.EXPECT().DecodeConfig(command.Buf).Return(image.Config{
 		ColorModel: nil,
 		Width:      10,
 		Height:     10,
@@ -396,7 +399,7 @@ func createSut(ctrl *gomock.Controller, ctx context.Context, command *UploadComm
 	}
 
 	if expectUploadTask {
-		s3.EXPECT().Upload(ctx, gomock.Any(), command.Reader).Return(new("etag"), nil)
+		s3.EXPECT().Upload(ctx, gomock.Any(), gomock.Any(), command.Buf).Return(new("etag"), nil)
 		repo.EXPECT().Insert(
 			ctx,
 			gomock.Any(),

@@ -33,7 +33,7 @@ func TestGetUserAvatarShouldReturnX300WebInDefault(t *testing.T) {
 		return
 	}
 	buffer := []byte("webp in S300x300")
-	s3.EXPECT().Download(ctx, image.S3Key).Return(buffer, nil)
+	s3.EXPECT().Download(ctx, userID, image.S3Key).Return(buffer, nil)
 
 	sut := NewUserService(newTransactor(), repo, taskRepo, s3)
 
@@ -86,7 +86,7 @@ func TestGetUserAvatarShouldReturnCorrectImage(t *testing.T) {
 			return
 		}
 		buffer := []byte("some image")
-		s3.EXPECT().Download(ctx, image.S3Key).Return(buffer, nil)
+		s3.EXPECT().Download(ctx, userID, image.S3Key).Return(buffer, nil)
 
 		sut := NewUserService(newTransactor(), repo, taskRepo, s3)
 
@@ -121,7 +121,7 @@ func TestGetUserAvatarShouldReturnErrorWhenTagTheSame(t *testing.T) {
 	}
 	image.ETag = tag
 	buffer := []byte("webp in S300x300")
-	s3.EXPECT().Download(ctx, image.S3Key).Return(buffer, nil).Times(0)
+	s3.EXPECT().Download(ctx, userID, image.S3Key).Return(buffer, nil).Times(0)
 
 	sut := NewUserService(newTransactor(), repo, taskRepo, s3)
 

@@ -43,7 +43,7 @@ func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, 
 	e, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, infra.ErrNoRows) {
-			return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, "by user_id", err)
+			return nil, nil, entity.WrapError(entity.NotFoundEntityErrorCode, "by user_id", err)
 		}
 		return nil, nil, err
 	}
@@ -51,7 +51,7 @@ func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, 
 		return image.Format == request.Format && image.Size == request.Size
 	})
 	if idx == -1 {
-		return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, "not found source", err)
+		return nil, nil, entity.WrapError(entity.NotFoundEntityErrorCode, "not found source", err)
 	}
 	image := e.Images[idx]
 
@@ -59,7 +59,7 @@ func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, 
 		return nil, nil, ErrAvatarNotModified
 	}
 
-	buf, err := s.s3.Download(ctx, image.S3Key)
+	buf, err := s.s3.Download(ctx, userID, image.S3Key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -79,7 +79,7 @@ func (s *UserService) GetDefault(eTag string, request *Request) (*entity.Image, 
 		return avatar.Format == request.Format && avatar.Size == request.Size.String()
 	})
 	if idx == -1 {
-		return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, "not found source")
+		return nil, nil, entity.WrapError(entity.NotFoundEntityErrorCode, "not found source", nil)
 	}
 	av := assets.DefaultAvatars[idx]
 	if eTag == av.ETag {
@@ -101,7 +101,7 @@ func (s *UserService) Delete(ctx context.Context, userID entity.Email) error {
 	e, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, infra.ErrNoRows) {
-			return entity.Error(entity.NotFoundEntityErrorCode, "by user_id", err)
+			return entity.WrapError(entity.NotFoundEntityErrorCode, "by user_id", err)
 		}
 		return err
 	}
@@ -109,7 +109,7 @@ func (s *UserService) Delete(ctx context.Context, userID entity.Email) error {
 		err = s.repo.Delete(ctx, e.ID)
 		if err != nil {
 			if errors.Is(err, infra.ErrNoRows) {
-				return entity.Error(entity.NotFoundEntityErrorCode, "by user_id", err)
+				return entity.WrapError(entity.NotFoundEntityErrorCode, "by user_id", err)
 			}
 			return err
 		}
