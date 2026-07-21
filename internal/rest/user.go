@@ -66,7 +66,7 @@ func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
 	logger := logging.Logger(c.Request().Context())
 	if e == nil {
 		logger.Error("avatarBlob called with nil image")
-		return Error(c, entity.Error(entity.InternalErrorCode, "avatar image is empty"))
+		return Error(c, entity.WrapError(entity.InternalErrorCode, "avatar image is empty", nil))
 	}
 
 	c.Response().Header().Set("Cache-Control", "max-age=86400")

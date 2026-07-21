@@ -24,13 +24,14 @@ func NewCodec() *imageCodec {
 	return &imageCodec{}
 }
 
-func (codec *imageCodec) DecodeConfig(r io.ReadSeeker) (image.Config, error) {
+func (codec *imageCodec) DecodeConfig(data []byte) (image.Config, error) {
 	var cfg image.Config
-	cfg, _, err := image.DecodeConfig(r)
+	var buf bytes.Buffer
+	buf.Write(data)
+	cfg, _, err := image.DecodeConfig(&buf)
 	if err != nil {
 		return cfg, err
 	}
-	_, _ = r.Seek(0, io.SeekStart)
 	return cfg, nil
 }
 

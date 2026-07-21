@@ -26,7 +26,11 @@ type (
 
 type InboxHandler func(context.Context, string, []byte) error
 
-func NewUploadHandler(repo entity.AvatarRepository, s3 entity.S3, codec entity.ImageCodec) InboxHandler {
+func NewUploadHandler(
+	repo entity.AvatarRepository,
+	s3 entity.S3,
+	codec entity.ImageCodec,
+) InboxHandler {
 	return func(ctx context.Context, key string, content []byte) error {
 		var ev events.AvatarUploadedEvent
 		if err := ev.Read(content); err != nil {
@@ -39,15 +43,15 @@ func NewUploadHandler(repo entity.AvatarRepository, s3 entity.S3, codec entity.I
 		meta, err := repo.Find(ctx, avatarID)
 		if err != nil {
 			if errors.Is(err, infra.ErrNoRows) {
-				return entity.Error(entity.NotFoundEntityErrorCode, "data not found")
+				return entity.WrapError(entity.NotFoundEntityErrorCode, "data not found", nil)
 			}
 			return err
 		}
 		if len(meta.Images) == 0 {
-			return entity.Error(entity.NotFoundEntityErrorCode, "no images found")
+			return entity.WrapError(entity.NotFoundEntityErrorCode, "no images found", nil)
 		}
 		img := meta.Images[0]
-		buffer, err := s3.Download(ctx, img.S3Key)
+		buffer, err := s3.Download(ctx, meta.UserID, img.S3Key)
 		if err != nil {
 			return err
 		}
@@ -64,18 +68,43 @@ func NewUploadHandler(repo entity.AvatarRepository, s3 entity.S3, codec entity.I
 				if img.Format == format {
 					meta.Images[base] = img
 				} else {
-					original, err := convertToFormat(errCtx, codec, s3, meta, src, format, entity.OriginalSize)
+					original, err := convertToFormat(
+						errCtx,
+						codec,
+						s3,
+						meta,
+						src,
+						format,
+						entity.OriginalSize,
+					)
 					if err != nil {
 						return err
 					}
 					meta.Images[base] = original
+
 				}
-				x300, err := convertToFormat(errCtx, codec, s3, meta, src, format, entity.S300x300Size)
+				x300, err := convertToFormat(
+					errCtx,
+					codec,
+					s3,
+					meta,
+					src,
+					format,
+					entity.S300x300Size,
+				)
 				if err != nil {
 					return err
 				}
 				meta.Images[base+1] = x300
-				x100, err := convertToFormat(errCtx, codec, s3, meta, src, format, entity.S100x100Size)
+				x100, err := convertToFormat(
+					errCtx,
+					codec,
+					s3,
+					meta,
+					src,
+					format,
+					entity.S100x100Size,
+				)
 				if err != nil {
 					return err
 				}
@@ -93,7 +122,15 @@ func NewUploadHandler(repo entity.AvatarRepository, s3 entity.S3, codec entity.I
 	}
 }
 
-func convertToFormat(ctx context.Context, codec entity.ImageCodec, s3 entity.S3, a *entity.Avatar, src image.Image, format string, size entity.Size) (*entity.Image, error) {
+func convertToFormat(
+	ctx context.Context,
+	codec entity.ImageCodec,
+	s3 entity.S3,
+	a *entity.Avatar,
+	src image.Image,
+	format string,
+	size entity.Size,
+) (*entity.Image, error) {
 	var buf []byte
 	var err error
 	var tag *string
@@ -118,9 +155,9 @@ func convertToFormat(ctx context.Context, codec entity.ImageCodec, s3 entity.S3,
 		Size:     size,
 		FileSize: int64(len(buf)),
 		MimeType: mimeType,
-		S3Key:    fmt.Sprintf("%s/%s/%s_%s.%s", a.UserID.String(), a.ID.String(), size, a.Name, format),
+		S3Key:    fmt.Sprintf("%s/%s_%s.%s", a.ID.String(), size, a.Name, format),
 	}
-	tag, err = s3.Upload(ctx, e.S3Key, bytes.NewReader(buf))
+	tag, err = s3.Upload(ctx, a.UserID, e.S3Key, buf)
 	if err != nil {
 		return nil, err
 	}
@@ -138,10 +175,14 @@ func NewDeleteHandler(avatarRepo entity.AvatarRepository, s3 entity.S3) InboxHan
 		if err != nil {
 			return err
 		}
+		userID, err := entity.ParseEmail(ev.UserID)
+		if err != nil {
+			return err
+		}
 		errGroup, errCtx := errgroup.WithContext(ctx)
 		for _, k := range ev.S3Key {
 			errGroup.Go(func() error {
-				return s3.Delete(errCtx, k)
+				return s3.Delete(errCtx, userID, k)
 			})
 		}
 		if err = errGroup.Wait(); err != nil {
@@ -149,7 +190,7 @@ func NewDeleteHandler(avatarRepo entity.AvatarRepository, s3 entity.S3) InboxHan
 		}
 		if err = avatarRepo.DeleteImages(ctx, id); err != nil {
 			if errors.Is(err, infra.ErrNoRows) {
-				return entity.Error(entity.NotFoundEntityErrorCode, "data not found")
+				return entity.WrapError(entity.NotFoundEntityErrorCode, "data not found", nil)
 			}
 			return err
 		}

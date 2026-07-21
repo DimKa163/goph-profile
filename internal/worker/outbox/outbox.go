@@ -62,7 +62,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			ctx, span := o.tracer.Start(ctx, "outbox read tasks", trace.WithSpanKind(trace.SpanKindServer))
+			ctx, span := o.tracer.Start(ctx, "outbox read tasks")
 			logger := logging.Logger(ctx)
 			if err := o.transactor.WithTx(ctx, func(ctx context.Context) error {
 				m, err := o.taskRepo.GetAll(ctx, ttl, batchSize)
@@ -78,10 +78,10 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 				failed := make([]taskErrorDescription, 0)
 				for _, task := range m {
 					ctx := task.Trace(ctx)
-					ctx, taskSpan := o.tracer.Start(ctx, "outbox publish", trace.WithSpanKind(trace.SpanKindProducer))
-					taskSpan.SetAttributes(
+					ctx, taskSpan := o.tracer.Start(ctx, "outbox publish", trace.WithAttributes(
 						attribute.String("kind", task.Type.String()),
-					)
+						attribute.String("id", task.ID),
+					))
 					if err = producer.Produce(ctx, &kafka.Message{
 						Topic:       "avatar",
 						Key:         []byte(task.RecordID),
@@ -90,7 +90,16 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						EventID:     task.ID,
 						TaskType:    task.Type,
 					}); err != nil {
-						logger.Error("failed to produce", zap.Error(err))
+						taskSpan.RecordError(err)
+						taskSpan.End()
+						logger.Error(
+							"failed to produce",
+							zap.Error(err),
+							zap.String(
+								"task_id",
+								task.ID,
+							),
+						)
 						failed = append(failed, taskErrorDescription{
 							Error: err,
 							ID:    task.ID,
@@ -98,7 +107,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						continue
 					}
 					succeed = append(succeed, task.ID)
-					span.End()
+					taskSpan.End()
 				}
 
 				if len(succeed) > 0 {

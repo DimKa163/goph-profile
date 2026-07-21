@@ -6,7 +6,6 @@ import (
 	"fmt"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 	"path/filepath"
 	"slices"
 
@@ -32,7 +31,7 @@ type (
 		UserID   entity.Email
 		Size     int64
 		MimeType string
-		Reader   io.ReadSeeker
+		Buf      []byte
 	}
 	Request struct {
 		ID     entity.AvatarID
@@ -62,16 +61,16 @@ func (s *AvatarService) Metadata(ctx context.Context, id entity.AvatarID) (*enti
 	e, err := s.repo.Find(ctx, id)
 	if err != nil {
 		if errors.Is(err, infra.ErrNoRows) {
-			return nil, entity.Error(entity.NotFoundEntityErrorCode, id, err)
+			return nil, entity.WrapError(entity.NotFoundEntityErrorCode, id, err)
 		}
-		return nil, entity.Error(entity.InternalErrorCode, id, err)
+		return nil, entity.WrapError(entity.InternalErrorCode, id, err)
 	}
 	return e, nil
 }
 
 func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*entity.Image, []byte, error) {
 	var err error
-	var images []*entity.Image
+	var avatar *entity.Avatar
 	var src []byte
 	if req.Size == "" {
 		req.Size = entity.S300x300Size
@@ -80,14 +79,14 @@ func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*en
 	if req.Format == "" {
 		req.Format = "webp"
 	}
-	images, err = s.repo.FindImage(ctx, req.ID)
+	avatar, err = s.repo.Find(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, infra.ErrNoRows) {
-			return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, req.ID, err)
+			return nil, nil, entity.WrapError(entity.NotFoundEntityErrorCode, req.ID, err)
 		}
-		return nil, nil, entity.Error(entity.InternalErrorCode, req.ID, err)
+		return nil, nil, entity.WrapError(entity.InternalErrorCode, req.ID, err)
 	}
-	idx := slices.IndexFunc(images, func(e *entity.Image) bool {
+	idx := slices.IndexFunc(avatar.Images, func(e *entity.Image) bool {
 		if req.Size != "" && e.Size != req.Size {
 			return false
 		}
@@ -99,15 +98,15 @@ func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*en
 		return true
 	})
 	if idx == -1 {
-		return nil, nil, entity.Error(entity.NotFoundEntityErrorCode, req.ID.String())
+		return nil, nil, entity.WrapError(entity.NotFoundEntityErrorCode, req.ID.String(), nil)
 	}
-	e := images[idx]
+	e := avatar.Images[idx]
 	if eTag == e.ETag {
 		return nil, nil, ErrAvatarNotModified
 	}
-	src, err = s.s3.Download(ctx, e.S3Key)
+	src, err = s.s3.Download(ctx, avatar.UserID, e.S3Key)
 	if err != nil {
-		return nil, nil, entity.Error(entity.InternalErrorCode, req.ID, err)
+		return nil, nil, entity.WrapError(entity.InternalErrorCode, req.ID, err)
 	}
 	return e, src, nil
 }
@@ -121,24 +120,23 @@ func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.
 		return nil, err
 	}
 
-	cfg, err := s.codec.DecodeConfig(uc.Reader)
+	cfg, err := s.codec.DecodeConfig(uc.Buf)
 	if err != nil {
 		return nil, err
 	}
 
 	entityID := entity.NewAvatarID()
 	fileName := baseName(uc.FileName)
-	s3Key := fmt.Sprintf("%s/%s/%s_%s", uc.UserID.String(), entityID.String(), entity.OriginalSize, uc.FileName)
-	tag, err := s.s3.Upload(ctx, s3Key, uc.Reader)
+	s3Key := fmt.Sprintf("%s/%s_%s", entityID.String(), entity.OriginalSize, fileName)
+	tag, err := s.s3.Upload(ctx, uc.UserID, s3Key, uc.Buf)
 	if err != nil {
-		return nil, entity.Error(entity.InternalErrorCode, "", err)
+		return nil, entity.WrapError(entity.InternalErrorCode, "", err)
 	}
-
 	defer func() {
 		if err != nil {
 			logger := logging.Logger(ctx)
 			logger.Debug(" error occurred during transaction. trying to clean up storage")
-			if err = s.s3.Delete(ctx, s3Key); err != nil {
+			if err = s.s3.Delete(ctx, uc.UserID, s3Key); err != nil {
 				logger.Error("error occurred during cleaning storage", zap.Error(err))
 			}
 		}
@@ -188,7 +186,7 @@ func (s *AvatarService) Delete(ctx context.Context, id entity.AvatarID, userID e
 	}
 
 	if meta.UserID != userID {
-		return entity.Error(entity.PermissionDeniedErrorCode, meta.ID.String())
+		return entity.WrapError(entity.PermissionDeniedErrorCode, meta.ID.String(), nil)
 	}
 
 	return s.tx.WithTx(ctx, func(ctx context.Context) error {
@@ -204,6 +202,7 @@ func (s *AvatarService) Delete(ctx context.Context, id entity.AvatarID, userID e
 		ev := &events.AvatarDeleted{
 			AvatarID: id.String(),
 			S3Key:    keys,
+			UserID:   meta.UserID.String(),
 		}
 		b, err := ev.Bytes()
 		if err != nil {
@@ -215,7 +214,7 @@ func (s *AvatarService) Delete(ctx context.Context, id entity.AvatarID, userID e
 
 func validateAvatarSize(size int64) error {
 	if size > maxAvatarSize || size <= 0 {
-		return entity.Error(entity.InvalidSizeErrorCode, size)
+		return entity.WrapError(entity.InvalidSizeErrorCode, size, nil)
 	}
 	return nil
 }
@@ -229,7 +228,7 @@ func formatByMimeType(mimeType string) (string, error) {
 	case "image/webp":
 		return "webp", nil
 	default:
-		return "", entity.Error(entity.InvalidContentTypeErrorCode, mimeType)
+		return "", entity.WrapError(entity.InvalidContentTypeErrorCode, mimeType, nil)
 	}
 }
 

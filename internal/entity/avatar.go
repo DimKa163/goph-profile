@@ -70,10 +70,10 @@ type Email string
 func ParseEmail(email string) (Email, error) {
 	email = strings.TrimSpace(email)
 	if email == "" {
-		return "", Error(InvalidUserIDErrorCode, "user id must not be empty")
+		return "", WrapError(InvalidUserIDErrorCode, "user id must not be empty", nil)
 	}
 	if !emailRegex.MatchString(email) {
-		return "", Error(InvalidUserIDErrorCode, email)
+		return "", WrapError(InvalidUserIDErrorCode, email, nil)
 	}
 	return Email(email), nil
 }
@@ -117,9 +117,12 @@ func (e *AvatarID) Scan(value any) error {
 
 func ParseAvatarID(value string) (AvatarID, error) {
 	var avatarID AvatarID
+	if value == "" {
+		return avatarID, WrapError(InvalidAvatarIDErrorCode, "value is empty", nil)
+	}
 	id, err := guid.ParseString(value)
 	if err != nil {
-		return avatarID, Error(InvalidAvatarIDErrorCode, value, err)
+		return avatarID, WrapError(InvalidAvatarIDErrorCode, fmt.Sprintf("value %s", value), err)
 	}
 	return AvatarID(*id), nil
 }

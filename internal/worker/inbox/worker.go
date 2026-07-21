@@ -87,6 +87,7 @@ func AvatarUploadedEventWorker(ctx context.Context, tracer *kotel.Tracer, h Idem
 						Err:    err,
 						Record: record,
 					})
+					span.End()
 					continue
 				}
 				suc = append(suc, record)
