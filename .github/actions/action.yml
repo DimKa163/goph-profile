@@ -1,0 +1,14 @@
+name: Setup Go
+description: A reusable workflow to set up Go environment and cache dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - name: Download dependencies
+      shell: bash
+      run: go mod download
