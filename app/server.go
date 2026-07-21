@@ -145,7 +145,7 @@ func RunServer(conf config.GophConfig, name, version, buildDate string) error {
 			}
 			return c.JSON(http.StatusOK, state)
 		})
-		e.File("/", "server/static/index.html")
+		e.File("/", "web/static/index.html")
 		webApi := e.Group("/api")
 		v1 := webApi.Group("/v1")
 

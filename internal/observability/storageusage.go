@@ -41,6 +41,9 @@ func UseStorageUsageObserver(name string, pool *retryablepgxpool.Pool) error {
 					attribute.String("user_id", userID),
 				))
 			}
+			if err = rows.Err(); err != nil {
+				return err
+			}
 			return nil
 		}),
 	)

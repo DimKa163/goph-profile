@@ -31,12 +31,26 @@ func NewAvatarController(metric observability.MetricService, service *usecase.Av
 
 func (a *avatarController) Register(e Section) {
 	e.GET("/avatars/:avatar_id", a.Get)
-	e.POST("/avatars", a.Avatar)
+	e.POST("/avatars", a.Avatar, bodyLimit("12M"))
 	e.DELETE("/avatars/:avatar_id", a.Delete)
 	e.GET("/avatars/:avatar_id/metadata", a.Metadata)
 }
 
 func (a *avatarController) Avatar(c echo.Context) error {
+	startTime := time.Now()
+	status := observability.Success
+	var userID entity.Email
+	var err error
+	defer func() {
+		if err != nil {
+			status = observability.Failure
+		}
+		since := time.Since(startTime)
+		if userID != "" {
+			a.metric.AvatarUploaded(c.Request().Context(), userID, status)
+		}
+		a.metric.AvatarUploadDuration(c.Request().Context(), status, since)
+	}()
 	span := trace.SpanFromContext(c.Request().Context())
 	logger := logging.Logger(c.Request().Context())
 	img, err := c.FormFile("image")
@@ -44,12 +58,12 @@ func (a *avatarController) Avatar(c echo.Context) error {
 		logger.Error("error getting image", zap.Error(err))
 		return Error(c, err)
 	}
-
-	userID, err := entity.ParseEmail(c.Request().Header.Get("X-User-Id"))
+	userID, err = entity.ParseEmail(c.Request().Header.Get("X-User-Id"))
 	if err != nil {
 		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
+
 	src, err := img.Open()
 	if err != nil {
 		logger.Error("error opening image", zap.Error(err))
@@ -64,13 +78,7 @@ func (a *avatarController) Avatar(c echo.Context) error {
 		logger.Error("error reading mime type", zap.Error(err))
 		return Error(c, err)
 	}
-	startTime := time.Now()
-	status := observability.Success
-	defer func() {
-		since := time.Since(startTime)
-		a.metric.AvatarUploaded(c.Request().Context(), userID, status)
-		a.metric.AvatarUploadDuration(c.Request().Context(), status, since)
-	}()
+
 	span.SetAttributes(
 		attribute.String("user_id", userID.String()),
 		attribute.String("mime_type", mimeType),

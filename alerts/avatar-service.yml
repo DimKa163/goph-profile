@@ -2,15 +2,23 @@ groups:
   - name: avatar-service
     rules:
       - alert: HighErrorRate
-        expr: rate(avatars_uploads_total{status="error"}[5m]) / rate(avatars_uploads_total[5m]) > 0.1
+        expr: |
+          sum(rate(avatars_uploads_total{status="failure"}[5m]))
+          /
+          sum(rate(avatars_uploads_total[5m]))
+          > 0.1
         for: 5m
         labels:
           severity: warning
 
       - alert: HighResponseTime
-        expr: histogram_quantile(0.95, sum by (le) (
-          rate(avatars_upload_duration_seconds_bucket[5m])
-          )) > 5
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(avatars_upload_duration_seconds_bucket[5m])
+            )
+          ) > 5
         for: 2m
         labels:
           severity: critical

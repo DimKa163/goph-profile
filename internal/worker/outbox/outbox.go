@@ -78,10 +78,10 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 				failed := make([]taskErrorDescription, 0)
 				for _, task := range m {
 					ctx := task.Trace(ctx)
-					ctx, taskSpan := o.tracer.Start(ctx, "outbox publish", trace.WithSpanKind(trace.SpanKindProducer))
-					taskSpan.SetAttributes(
+					ctx, taskSpan := o.tracer.Start(ctx, "outbox publish", trace.WithAttributes(
 						attribute.String("kind", task.Type.String()),
-					)
+						attribute.String("id", task.ID),
+					))
 					if err = producer.Produce(ctx, &kafka.Message{
 						Topic:       "avatar",
 						Key:         []byte(task.RecordID),
