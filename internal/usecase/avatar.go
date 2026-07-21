@@ -127,7 +127,7 @@ func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.
 
 	entityID := entity.NewAvatarID()
 	fileName := baseName(uc.FileName)
-	s3Key := fmt.Sprintf("%s/%s_%s", entityID.String(), entity.OriginalSize, uc.FileName)
+	s3Key := fmt.Sprintf("%s/%s_%s", entityID.String(), entity.OriginalSize, fileName)
 	tag, err := s.s3.Upload(ctx, uc.UserID, s3Key, uc.Buf)
 	if err != nil {
 		return nil, entity.WrapError(entity.InternalErrorCode, "", err)

@@ -119,6 +119,7 @@ func (s *UserService) Delete(ctx context.Context, userID entity.Email) error {
 		}
 		ev := events.AvatarDeleted{
 			AvatarID: e.ID.String(),
+			UserID:   e.UserID.String(),
 			S3Key:    keys,
 		}
 		j, _ := ev.Bytes()
