@@ -21,10 +21,6 @@ tasks:
   go-lint:
     desc: "Run golangci-lint"
     cmds:
-      - golangci-lint run ./...
-
-  go-fmt:
-    cmds:
       - |
         if [ "${OS:-}" = "Windows_NT" ]; then
           LINT="{{.GOBIN}}/golangci-lint.exe"
@@ -47,6 +43,10 @@ tasks:
           echo "Running golangci-lint..."
           "{{.GOBIN}}/golangci-lint" run --config=.golangci.yaml
         fi
+
+  go-fmt:
+    cmd:
+      go fmt ./...
 
   default:
     desc: Print a greeting message
