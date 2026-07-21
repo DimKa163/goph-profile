@@ -26,7 +26,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func RunServer(conf config.GophConfig, name, version, buildDate string) error {
+func RunServer(conf config.GophConfig, name, version, buildDate, commit string) error {
 	return run(name, version, func(ctx context.Context) error {
 		log := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
@@ -173,6 +173,7 @@ func RunServer(conf config.GophConfig, name, version, buildDate string) error {
 			zap.String("name", name),
 			zap.String("version", version),
 			zap.String("build_date", buildDate),
+			zap.String("commit", commit),
 			zap.String("bucket", conf.Bucket),
 			zap.String("region", conf.Region),
 			zap.String("s3_endpoint", conf.Endpoint),

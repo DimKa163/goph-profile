@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func RunOutbox(conf config.GophConfig, name, version, buildDate string) error {
+func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) error {
 	return run(name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
@@ -33,6 +33,7 @@ func RunOutbox(conf config.GophConfig, name, version, buildDate string) error {
 			zap.String("name", name),
 			zap.String("version", version),
 			zap.String("build_date", buildDate),
+			zap.String("commit", commit),
 			zap.String("brokers", conf.Brokers),
 			zap.Int("batch_max_size", conf.BatchMaxSize),
 			zap.Duration("delivery_timeout", conf.DeliveryTimeout),

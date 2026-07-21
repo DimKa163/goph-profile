@@ -18,7 +18,7 @@ func main() {
 	if err := env.Parse(&conf); err != nil {
 		panic(err)
 	}
-	if err := app.RunInbox(conf, Name, Version, BuildDate); err != nil {
+	if err := app.RunInbox(conf, Name, Version, BuildDate, Commit); err != nil {
 		panic(err)
 	}
 }
