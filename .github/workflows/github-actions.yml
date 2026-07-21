@@ -1,6 +1,12 @@
 name: goph-profile
 run-name: testing goph-profile
 
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
 permissions:
   contents: read
 

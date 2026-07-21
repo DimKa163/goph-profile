@@ -1,5 +1,5 @@
 name: Setup Go
-description: A reusable workflow to set up Go environment and cache dependencies
+description: A reusable workflows to set up Go environment and cache dependencies
 
 runs:
   using: composite
