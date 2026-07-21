@@ -34,8 +34,8 @@ jobs:
         run: go test -race -cover ./...
 
 
-  build-server:
-    runs-on: ${{matrix.os}}
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest ]
@@ -48,49 +48,72 @@ jobs:
             server_binary: goph-server.exe
             outbox_binary: goph-outbox.exe
             inbox_binary: goph-inbox.exe
+
     needs: [ lint, test ]
+
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-go
 
       - name: Build server-app
+        shell: bash
         run: |
           mkdir -p build
-          go build -ldflags "-X main.Name=goph-server -X main.Version=${{ github.ref_name }} \
-            -X 'main.BuildDate=$(date -u +'%Y-%m-%d_%H:%M:%S')'\
-          -X 'main.Commit=${{ github.sha }}" -o ${{matrix.server_binary}} ./cmd/server
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT="${GITHUB_SHA::7}"
+          VERSION="${GITHUB_REF_NAME}"
+
+          go build \
+            -ldflags="-X 'main.Name=goph-server' -X 'main.Version=${VERSION}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.Commit=${COMMIT}'" \
+            -o "build/${{ matrix.server_binary }}" \
+            ./cmd/server
 
       - name: Server artifacts
         uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.server_binary }}
-          path: ${{ matrix.server_binary }}
+          path: build/${{ matrix.server_binary }}
           retention-days: 30
+          if-no-files-found: error
 
       - name: Build outbox-app
+        shell: bash
         run: |
           mkdir -p build
-          go build -ldflags "-X main.Name=goph-outbox -X main.Version=${{ github.ref_name }} \
-            -X 'main.BuildDate=$(date -u +'%Y-%m-%d_%H:%M:%S')'\
-          -X 'main.Commit=${{ github.sha }}" -o ${{matrix.outbox_binary}} ./cmd/outbox
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT="${GITHUB_SHA::7}"
+          VERSION="${GITHUB_REF_NAME}"
+
+          go build \
+            -ldflags="-X 'main.Name=goph-outbox' -X 'main.Version=${VERSION}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.Commit=${COMMIT}'" \
+            -o "build/${{ matrix.outbox_binary }}" \
+            ./cmd/outbox
 
       - name: Outbox artifacts
         uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.outbox_binary }}
-          path: ${{ matrix.outbox_binary }}
+          path: build/${{ matrix.outbox_binary }}
           retention-days: 30
+          if-no-files-found: error
 
       - name: Build inbox-app
+        shell: bash
         run: |
           mkdir -p build
-          go build -ldflags "-X main.Name=goph-inbox -X main.Version=${{ github.ref_name }} \
-            -X 'main.BuildDate=$(date -u +'%Y-%m-%d_%H:%M:%S')'\
-          -X 'main.Commit=${{ github.sha }}" -o ${{matrix.inbox_binary}} ./cmd/inbox
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT="${GITHUB_SHA::7}"
+          VERSION="${GITHUB_REF_NAME}"
+
+          go build \
+            -ldflags="-X 'main.Name=goph-inbox' -X 'main.Version=${VERSION}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.Commit=${COMMIT}'" \
+            -o "build/${{ matrix.inbox_binary }}" \
+            ./cmd/inbox
 
       - name: Inbox artifacts
         uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.inbox_binary }}
-          path: ${{ matrix.inbox_binary }}
+          path: build/${{ matrix.inbox_binary }}
           retention-days: 30
+          if-no-files-found: error
