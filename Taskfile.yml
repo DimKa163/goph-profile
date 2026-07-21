@@ -3,7 +3,8 @@
 version: '3'
 
 vars:
-  GREETING: Hello, world!
+  GOBIN: '{{.ROOT_DIR}}/bin'
+  GOLANGCI_LINT_VERSION: 'v2.12.0'
 
 tasks:
   go-test:
@@ -48,8 +49,3 @@ tasks:
     cmd:
       go fmt ./...
 
-  default:
-    desc: Print a greeting message
-    cmds:
-      - echo "{{.GREETING}}"
-    silent: true
