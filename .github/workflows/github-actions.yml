@@ -24,7 +24,7 @@ jobs:
         run: test -z "$(gofmt -l .)"
 
       - name: Vet
-        run: task go-lint
+        run: go vet ./...
 
 
   test:
