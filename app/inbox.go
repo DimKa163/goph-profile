@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func RunInbox(conf config.GophConfig, name, version, buildDate string) error {
+func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) error {
 	return run(name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
@@ -75,6 +75,7 @@ func RunInbox(conf config.GophConfig, name, version, buildDate string) error {
 			zap.String("name", name),
 			zap.String("version", version),
 			zap.String("build_date", buildDate),
+			zap.String("commit", commit),
 			zap.String("brokers", conf.Brokers),
 			zap.String("group", conf.Group),
 			zap.String("client_id", clientID),
