@@ -11,6 +11,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/infra"
 )
 
+// UserService defines user service.
 type UserService struct {
 	transactor Transactor
 	repo       entity.AvatarRepository
@@ -18,19 +19,26 @@ type UserService struct {
 	s3         entity.S3
 }
 type (
+	// GetAllResponse contains avatar content for list responses.
 	GetAllResponse struct {
-		Name    string
-		Format  string
-		Size    entity.Size
+		// Name stores the name value.
+		Name string
+		// Format stores the format value.
+		Format string
+		// Size stores the size value.
+		Size entity.Size
+		// Content stores the content value.
 		Content []byte
 	}
 )
 
+// NewUserService creates a user service.
 func NewUserService(transactor Transactor, repo entity.AvatarRepository, taskRepo entity.TaskRepository, s3 entity.S3) *UserService {
 	return &UserService{transactor: transactor,
 		repo: repo, taskRepo: taskRepo, s3: s3}
 }
 
+// Get returns the requested avatar image.
 func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, request *Request) (*entity.Image, []byte, error) {
 	if request.Size == "" {
 		request.Size = entity.S300x300Size
@@ -67,6 +75,7 @@ func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, 
 	return image, buf, nil
 }
 
+// GetDefault returns the requested default avatar image.
 func (s *UserService) GetDefault(eTag string, request *Request) (*entity.Image, []byte, error) {
 	if request.Size == "" {
 		request.Size = entity.S300x300Size
@@ -93,10 +102,12 @@ func (s *UserService) GetDefault(eTag string, request *Request) (*entity.Image, 
 	}, av.Data, nil
 }
 
+// ListByUserID returns avatars for a user.
 func (s *UserService) ListByUserID(ctx context.Context, userID entity.Email) ([]*entity.Avatar, error) {
 	return s.repo.ListByUserID(ctx, userID)
 }
 
+// Delete removes or marks a record as deleted.
 func (s *UserService) Delete(ctx context.Context, userID entity.Email) error {
 	e, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {

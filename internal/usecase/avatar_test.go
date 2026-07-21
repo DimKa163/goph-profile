@@ -202,7 +202,7 @@ func TestUploadShouldHandleSpecificSize(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			ctx := context.Background()
-			sut := createSut(ctrl, ctx, tc.UploadCommand, !tc.ErrExpected)
+			sut := createSut(ctx, ctrl, tc.UploadCommand, !tc.ErrExpected)
 			e, err := sut.Upload(ctx, tc.UploadCommand)
 			if tc.ErrExpected {
 				require.Error(t, err)
@@ -290,7 +290,7 @@ func TestUploadShouldHandleSpecificContentType(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			ctx := context.Background()
-			sut := createSut(ctrl, ctx, tc.UploadCommand, !tc.ErrExpected)
+			sut := createSut(ctx, ctrl, tc.UploadCommand, !tc.ErrExpected)
 			e, err := sut.Upload(ctx, tc.UploadCommand)
 			if tc.ErrExpected {
 				require.Error(t, err)
@@ -382,7 +382,7 @@ func TestDeleteShouldBeFailureIfAvatarNotFound(t *testing.T) {
 	require.Equal(t, entity.NotFoundEntityErrorCode, pErr.Code)
 }
 
-func createSut(ctrl *gomock.Controller, ctx context.Context, command *UploadCommand, expectUploadTask bool) *AvatarService {
+func createSut(ctx context.Context, ctrl *gomock.Controller, command *UploadCommand, expectUploadTask bool) *AvatarService {
 	repo := mocks.NewMockAvatarRepository(ctrl)
 	taskRepo := mocks.NewMockTaskRepository(ctrl)
 	s3 := mocks.NewMockS3(ctrl)

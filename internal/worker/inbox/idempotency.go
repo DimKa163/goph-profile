@@ -1,3 +1,4 @@
+// Package inbox contains inbox worker processing and idempotency helpers.
 package inbox
 
 import (
@@ -16,20 +17,31 @@ import (
 )
 
 type (
+	// Transactor describes transactional execution.
 	Transactor interface {
+		// WithTx executes fn inside a transaction.
 		WithTx(ctx context.Context, fn func(context.Context) error) error
 	}
+	// MessageRepo defines message repo.
 	MessageRepo interface {
+		// Insert stores a new record.
 		Insert(ctx context.Context, key, consumer string, content []byte) error
 	}
 )
 
+// ErrAlreadyProcessed is returned when an event was already handled.
 var ErrAlreadyProcessed = errors.New("already processed")
+
+// ErrEventHeaderIDMissing is returned when the event ID header is absent.
 var ErrEventHeaderIDMissing = errors.New("event header ID missing")
+
+// ErrEventHeaderTypeMissing is returned when the event type header is absent.
 var ErrEventHeaderTypeMissing = errors.New("event header type missing")
 
+// IdempotencyHandler wraps event handling with idempotency checks.
 type IdempotencyHandler func(ctx context.Context, clientID string, record *kgo.Record, f func(ctx context.Context, kind string) error) error
 
+// Idempotency wraps inbox processing with idempotency checks.
 func Idempotency(tx Transactor, metricService observability.MetricService, repo MessageRepo) IdempotencyHandler {
 	return func(ctx context.Context, clientID string, record *kgo.Record, f func(ctx context.Context, kind string) error) error {
 		var eventID string

@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	// InsertInboxStmt defines the insert inbox stmt value.
 	InsertInboxStmt = `INSERT INTO inbox(id, consumer, content) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING;`
 )
 
@@ -14,12 +15,14 @@ type inboxRepository struct {
 	pool *retryablepgxpool.Pool
 }
 
+// NewInboxRepo creates an inbox repository.
 func NewInboxRepo(pool *retryablepgxpool.Pool) *inboxRepository {
 	return &inboxRepository{
 		pool: pool,
 	}
 }
 
+// Insert stores a new record.
 func (r *inboxRepository) Insert(ctx context.Context, key, consumer string, content []byte) error {
 	c := getCon(ctx, r.pool)
 	tag, err := c.Exec(ctx, InsertInboxStmt, key, consumer, content)

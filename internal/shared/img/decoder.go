@@ -1,3 +1,4 @@
+// Package img provides image decoding, encoding, and thumbnail helpers.
 package img
 
 import (
@@ -16,14 +17,17 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+// ErrUnsupportedImageFormat is returned for unsupported image formats.
 var ErrUnsupportedImageFormat = errors.New("unsupported image format")
 
 type imageCodec struct{}
 
+// NewCodec creates an image codec.
 func NewCodec() *imageCodec {
 	return &imageCodec{}
 }
 
+// DecodeConfig reads image metadata without decoding the whole image.
 func (codec *imageCodec) DecodeConfig(data []byte) (image.Config, error) {
 	var cfg image.Config
 	var buf bytes.Buffer
@@ -35,6 +39,7 @@ func (codec *imageCodec) DecodeConfig(data []byte) (image.Config, error) {
 	return cfg, nil
 }
 
+// Decode decodes image bytes.
 func (codec *imageCodec) Decode(r io.Reader) (image.Image, string, error) {
 	img, format, err := image.Decode(r)
 	if err != nil {
@@ -43,6 +48,7 @@ func (codec *imageCodec) Decode(r io.Reader) (image.Image, string, error) {
 	return img, format, nil
 }
 
+// Encode writes an image in the requested format.
 func (codec *imageCodec) Encode(src image.Image, format string, quality int) ([]byte, error) {
 	var buf bytes.Buffer
 	var err error
@@ -66,6 +72,7 @@ func (codec *imageCodec) Encode(src image.Image, format string, quality int) ([]
 	return buf.Bytes(), nil
 }
 
+// Thumbnail describes a generated avatar thumbnail.
 func (codec *imageCodec) Thumbnail(src image.Image, h, w int) image.Image {
 	bounds := src.Bounds()
 

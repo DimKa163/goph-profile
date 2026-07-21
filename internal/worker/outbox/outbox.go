@@ -1,3 +1,4 @@
+// Package outbox contains outbox worker processing.
 package outbox
 
 import (
@@ -14,18 +15,24 @@ import (
 )
 
 type (
+	// Transactor describes transactional execution.
 	Transactor interface {
+		// WithTx executes fn inside a transaction.
 		WithTx(ctx context.Context, fn func(context.Context) error) error
 	}
+	// Outbox describes outbox task persistence operations.
 	Outbox interface {
+		// Start starts processing.
 		Start(ctx context.Context, workers []kafka.Producer, batchSize int, waitTime, ttl time.Duration)
 	}
 )
 
 var _ Outbox = (*outboxImpl)(nil)
 
+// TypeHandler publishes a task payload.
 type TypeHandler func(ctx context.Context, key []byte, buffer []byte, headers ...kafka.Header) error
 
+// RootHandler resolves a handler for an event or task type.
 type RootHandler func(t entity.TaskType) (TypeHandler, error)
 
 type outboxImpl struct {
@@ -34,6 +41,7 @@ type outboxImpl struct {
 	taskRepo   entity.TaskRepository
 }
 
+// New creates an outbox worker.
 func New(tracer trace.Tracer, tx Transactor, taskRepo entity.TaskRepository) *outboxImpl {
 	return &outboxImpl{
 		tracer:     tracer,
@@ -42,6 +50,7 @@ func New(tracer trace.Tracer, tx Transactor, taskRepo entity.TaskRepository) *ou
 	}
 }
 
+// Start starts processing.
 func (o *outboxImpl) Start(ctx context.Context, workers []kafka.Producer, batchSize int, waitTime, ttl time.Duration) {
 	var wg sync.WaitGroup
 	for w := 0; len(workers) > w; w++ {
@@ -133,6 +142,8 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 }
 
 type taskErrorDescription struct {
-	Error error  `json:"error"`
-	ID    string `json:"id"`
+	// Error stores the error value.
+	Error error `json:"error"`
+	// ID stores the identifier.
+	ID string `json:"id"`
 }

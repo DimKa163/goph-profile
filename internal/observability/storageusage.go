@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	// StorageUsageStmt defines the storage usage stmt value.
 	StorageUsageStmt = `
 						SELECT avatars.user_id, COALESCE(SUM(images.file_size), 0)::BIGINT from public.images
 						JOIN public.avatars ON images.avatar_id = public.avatars.id
@@ -18,38 +19,44 @@ const (
 						`
 )
 
-var storageUsageMetric metric.Int64ObservableGauge
-
+// UseStorageUsageObserver registers a storage usage gauge callback.
 func UseStorageUsageObserver(name string, pool *retryablepgxpool.Pool) error {
 	meter := otel.Meter(name)
 	storageUsage, err := meter.Int64ObservableGauge(
 		"avatars_storage_bytes",
 		metric.WithDescription("Total storage used by avatars"),
-		metric.WithInt64Callback(func(ctx context.Context, observer metric.Int64Observer) error {
-			rows, err := pool.Query(ctx, StorageUsageStmt)
-			if err != nil {
-				return err
-			}
-			defer rows.Close()
-			for rows.Next() {
-				var userID string
-				var size int64
-				if err = rows.Scan(&userID, &size); err != nil {
-					return err
-				}
-				observer.Observe(size, metric.WithAttributes(
-					attribute.String("user_id", userID),
-				))
-			}
-			if err = rows.Err(); err != nil {
-				return err
-			}
-			return nil
-		}),
 	)
 	if err != nil {
 		return err
 	}
-	storageUsageMetric = storageUsage
-	return nil
+
+	_, err = meter.RegisterCallback(
+		observeStorageUsage(pool, storageUsage),
+		storageUsage,
+	)
+	return err
+}
+
+func observeStorageUsage(pool *retryablepgxpool.Pool, storageUsage metric.Int64ObservableGauge) metric.Callback {
+	return func(ctx context.Context, observer metric.Observer) error {
+		rows, err := pool.Query(ctx, StorageUsageStmt)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var userID string
+			var size int64
+			if err = rows.Scan(&userID, &size); err != nil {
+				return err
+			}
+
+			observer.ObserveInt64(storageUsage, size, metric.WithAttributes(
+				attribute.String("user_id", userID),
+			))
+		}
+
+		return rows.Err()
+	}
 }

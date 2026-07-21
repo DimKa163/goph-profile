@@ -1,3 +1,4 @@
+// Package rest contains HTTP controllers and REST response types.
 package rest
 
 import (
@@ -22,6 +23,7 @@ type avatarController struct {
 	service *usecase.AvatarService
 }
 
+// NewAvatarController creates an avatar controller.
 func NewAvatarController(metric observability.MetricService, service *usecase.AvatarService) *avatarController {
 	return &avatarController{
 		metric:  metric,
@@ -29,6 +31,7 @@ func NewAvatarController(metric observability.MetricService, service *usecase.Av
 	}
 }
 
+// Register registers routes on the Echo group.
 func (a *avatarController) Register(e Section) {
 	e.GET("/avatars/:avatar_id", a.Get)
 	e.POST("/avatars", a.Avatar, bodyLimit("12M"))
@@ -36,6 +39,7 @@ func (a *avatarController) Register(e Section) {
 	e.GET("/avatars/:avatar_id/metadata", a.Metadata)
 }
 
+// Avatar handles avatar upload or retrieval requests.
 func (a *avatarController) Avatar(c echo.Context) error {
 	startTime := time.Now()
 	status := observability.Success
@@ -111,6 +115,7 @@ func (a *avatarController) Avatar(c echo.Context) error {
 	})
 }
 
+// Get returns the requested avatar image.
 func (a *avatarController) Get(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
@@ -138,6 +143,7 @@ func (a *avatarController) Get(c echo.Context) error {
 	return c.Blob(http.StatusOK, e.MimeType, buf)
 }
 
+// Delete removes or marks a record as deleted.
 func (a *avatarController) Delete(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
@@ -159,6 +165,7 @@ func (a *avatarController) Delete(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// Metadata describes avatar metadata returned by the API.
 func (a *avatarController) Metadata(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	avatarID, err := entity.ParseAvatarID(c.Param("avatar_id"))

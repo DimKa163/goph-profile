@@ -26,6 +26,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// RunServer starts the HTTP server application.
 func RunServer(conf config.GophConfig, name, version, buildDate, commit string) error {
 	return run(name, version, func(ctx context.Context) error {
 		log := logging.Logger(ctx)
@@ -156,14 +157,16 @@ func RunServer(conf config.GophConfig, name, version, buildDate, commit string) 
 		go func() {
 			<-ctx.Done()
 			log.Info("shutting down server...")
-			timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			timeoutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 			defer cancel()
 			if err = server.Shutdown(timeoutCtx); err != nil {
 				log.Warn("failed to shutdown server", zap.Error(err))
 			}
 			log.Info("server shutdown")
 		}()
-		listener, err := net.Listen("tcp", server.Addr)
+		listenConfig := net.ListenConfig{}
+
+		listener, err := listenConfig.Listen(ctx, "tcp", server.Addr)
 		if err != nil {
 			log.Fatal("failed to listen server", zap.String("addr", server.Addr), zap.Error(err))
 			return err
@@ -199,10 +202,13 @@ func newUserService(s3client entity.S3, pool *retryablepgxpool.Pool) *usecase.Us
 		infra.NewTaskRepository(pool), s3client)
 }
 
+// TemplateRenderer renders HTML templates for Echo.
 type TemplateRenderer struct {
+	// Templates holds the parsed HTML templates.
 	Templates *template.Template
 }
 
+// Render executes the named template.
 func (r *TemplateRenderer) Render(w io.Writer, name string, data interface{}, _ echo.Context) error {
 	return r.Templates.ExecuteTemplate(w, name, data)
 }

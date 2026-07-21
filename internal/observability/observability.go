@@ -22,8 +22,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// ObsConfiger applies observability configuration.
 type ObsConfiger func(*observeConfiguration)
 
+// WithZapEncoderConfig applies a Zap encoder configuration.
 func WithZapEncoderConfig(config zapcore.EncoderConfig, layer ...func(encoderConfig *zapcore.EncoderConfig)) ObsConfiger {
 	return func(o *observeConfiguration) {
 		o.EncoderConfig = config
@@ -39,12 +41,14 @@ func WithZapEncoderConfig(config zapcore.EncoderConfig, layer ...func(encoderCon
 	}
 }
 
+// WithResources applies OpenTelemetry resource options.
 func WithResources(res ...resource.Option) ObsConfiger {
 	return func(o *observeConfiguration) {
 		o.ResourceOptions = append(o.ResourceOptions, res...)
 	}
 }
 
+// WithAttributes applies OpenTelemetry resource attributes.
 func WithAttributes(attribute ...attr.KeyValue) ObsConfiger {
 	return func(o *observeConfiguration) {
 		o.ResourceOptions = append(o.ResourceOptions, resource.WithAttributes(attribute...))
@@ -52,13 +56,19 @@ func WithAttributes(attribute ...attr.KeyValue) ObsConfiger {
 }
 
 type observeConfiguration struct {
-	ApplicationName  string
+	// ApplicationName stores the application name value.
+	ApplicationName string
+	// ExporterEndpoint stores the exporter endpoint value.
 	ExporterEndpoint string
-	EncoderConfig    zapcore.EncoderConfig
-	ResourceOptions  []resource.Option
-	Resource         *resource.Resource
+	// EncoderConfig stores the encoder config value.
+	EncoderConfig zapcore.EncoderConfig
+	// ResourceOptions stores the resource options value.
+	ResourceOptions []resource.Option
+	// Resource stores the resource value.
+	Resource *resource.Resource
 }
 
+// Init initializes logging, tracing, metrics, and profiling.
 func Init(ctx context.Context, name string, opt ...ObsConfiger) (context.Context, func(), error) {
 	var config observeConfiguration
 	config.ApplicationName = name

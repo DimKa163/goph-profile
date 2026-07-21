@@ -27,7 +27,7 @@ func TestUploadHandlerShouldBeWhenFirstImageSuccessful(t *testing.T) {
 
 	id := entity.NewAvatarID()
 	userID := entity.Email("user@user.com")
-	ev, data := newAvatarUploadedEvent(t, id)
+	_, data := newAvatarUploadedEvent(t, id)
 	metadata := newAvatarMetadata(id, userID)
 	repo.EXPECT().Find(ctx, id).Return(metadata, nil)
 	expectSuccessfulImageProcessing(ctx, s3, codec)
@@ -35,7 +35,7 @@ func TestUploadHandlerShouldBeWhenFirstImageSuccessful(t *testing.T) {
 	repo.EXPECT().ActivateOnlyThis(ctx, userID, metadata.ID).Return(nil)
 	sut := NewUploadHandler(repo, s3, codec)
 
-	err := sut(ctx, ev.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.NoError(t, err)
 }
@@ -50,11 +50,11 @@ func TestUploadHandlerShouldBeFailedWhenMetadataNotFound(t *testing.T) {
 	codec := mocks.NewMockImageCodec(ctrl)
 
 	id := entity.NewAvatarID()
-	ev, data := newAvatarUploadedEvent(t, id)
+	_, data := newAvatarUploadedEvent(t, id)
 	repo.EXPECT().Find(ctx, id).Return(nil, infra.ErrNoRows)
 
 	sut := NewUploadHandler(repo, s3, codec)
-	err := sut(ctx, ev.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.Error(t, err)
 
@@ -73,7 +73,7 @@ func TestUploadHandlerShouldBeFailedWhenImagesNotFound(t *testing.T) {
 	codec := mocks.NewMockImageCodec(ctrl)
 	id := entity.NewAvatarID()
 	userID := entity.Email("user@user.com")
-	ev, data := newAvatarUploadedEvent(t, id)
+	_, data := newAvatarUploadedEvent(t, id)
 	metadata := &entity.Avatar{
 		ID:     id,
 		UserID: userID,
@@ -81,7 +81,7 @@ func TestUploadHandlerShouldBeFailedWhenImagesNotFound(t *testing.T) {
 	repo.EXPECT().Find(ctx, id).Return(metadata, nil)
 
 	sut := NewUploadHandler(repo, s3, codec)
-	err := sut(ctx, ev.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.Error(t, err)
 
@@ -100,7 +100,7 @@ func TestUploadHandlerShouldBeFailedWhenDecodeFailed(t *testing.T) {
 	codec := mocks.NewMockImageCodec(ctrl)
 	id := entity.NewAvatarID()
 	userID := entity.Email("user@user.com")
-	ev, data := newAvatarUploadedEvent(t, id)
+	_, data := newAvatarUploadedEvent(t, id)
 	metadata := newAvatarMetadata(id, userID)
 	repo.EXPECT().Find(ctx, id).Return(metadata, nil)
 	imageData := []byte("image data")
@@ -109,7 +109,7 @@ func TestUploadHandlerShouldBeFailedWhenDecodeFailed(t *testing.T) {
 	codec.EXPECT().Decode(gomock.Any()).Return(nil, "", decodeErr)
 
 	sut := NewUploadHandler(repo, s3, codec)
-	err := sut(ctx, ev.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.ErrorIs(t, err, decodeErr)
 }
@@ -124,7 +124,7 @@ func TestUploadHandlerShouldBeFailedWhenUploadFailed(t *testing.T) {
 	codec := mocks.NewMockImageCodec(ctrl)
 	id := entity.NewAvatarID()
 	userID := entity.Email("user@user.com")
-	ev, data := newAvatarUploadedEvent(t, id)
+	_, data := newAvatarUploadedEvent(t, id)
 	metadata := newAvatarMetadata(id, userID)
 	repo.EXPECT().Find(ctx, id).Return(metadata, nil)
 	imageData := []byte("image data")
@@ -140,7 +140,7 @@ func TestUploadHandlerShouldBeFailedWhenUploadFailed(t *testing.T) {
 	s3.EXPECT().Upload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, uploadErr).AnyTimes()
 
 	sut := NewUploadHandler(repo, s3, codec)
-	err := sut(ctx, ev.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.ErrorIs(t, err, uploadErr)
 }
@@ -155,7 +155,7 @@ func TestUploadHandlerShouldBeFailedWhenInsertImageFailed(t *testing.T) {
 	codec := mocks.NewMockImageCodec(ctrl)
 	id := entity.NewAvatarID()
 	userID := entity.Email("user@user.com")
-	ev, data := newAvatarUploadedEvent(t, id)
+	_, data := newAvatarUploadedEvent(t, id)
 	metadata := newAvatarMetadata(id, userID)
 	repo.EXPECT().Find(ctx, id).Return(metadata, nil)
 	expectSuccessfulImageProcessing(ctx, s3, codec)
@@ -163,7 +163,7 @@ func TestUploadHandlerShouldBeFailedWhenInsertImageFailed(t *testing.T) {
 	repo.EXPECT().InsertImage(ctx, metadata).Return(insertErr)
 
 	sut := NewUploadHandler(repo, s3, codec)
-	err := sut(ctx, ev.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.ErrorIs(t, err, insertErr)
 }
@@ -212,7 +212,7 @@ func TestDeleteHandlerShouldBeSuccessful(t *testing.T) {
 	s3.EXPECT().Delete(gomock.Any(), userID, "key2").Return(nil)
 	sut := NewDeleteHandler(repo, s3)
 	data, _ := e.Bytes()
-	err := sut(ctx, e.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.NoError(t, err)
 }
@@ -236,7 +236,7 @@ func TestDeleteHandlerShouldBeFailedWhenNoImages(t *testing.T) {
 	}
 	sut := NewDeleteHandler(repo, s3)
 	data, _ := e.Bytes()
-	err := sut(ctx, e.AvatarID, data)
+	err := sut(ctx, data)
 
 	require.Error(t, err)
 	var pe *entity.ProfileError
@@ -281,6 +281,6 @@ func (i *img) Bounds() image.Rectangle {
 
 }
 
-func (i *img) At(x, y int) color.Color {
+func (i *img) At(_, _ int) color.Color {
 	return nil
 }

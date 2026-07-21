@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// RunInbox starts the inbox worker application.
 func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) error {
 	return run(name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
@@ -79,7 +80,7 @@ func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) e
 			zap.String("brokers", conf.Brokers),
 			zap.String("group", conf.Group),
 			zap.String("client_id", clientID),
-			zap.Int("batch_max_size", conf.BatchMaxSize),
+			zap.Int32("batch_max_size", conf.BatchMaxSize),
 			zap.Duration("delivery_timeout", conf.DeliveryTimeout),
 			zap.Bool("auto_commit", conf.AutoCommit),
 			zap.String("bucket", conf.Bucket),

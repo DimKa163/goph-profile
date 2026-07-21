@@ -19,6 +19,7 @@ type s3Client struct {
 	bucketName string
 }
 
+// NewS3 creates an S3 storage client.
 func NewS3(tracer trace.Tracer, client *s3.Client, bucket string) *s3Client {
 	return &s3Client{
 		tracer:     tracer,
@@ -26,6 +27,8 @@ func NewS3(tracer trace.Tracer, client *s3.Client, bucket string) *s3Client {
 		bucketName: bucket,
 	}
 }
+
+// Check verifies that the storage backend is reachable.
 func (s *s3Client) Check(ctx context.Context) error {
 	ctx, span := s.tracer.Start(ctx, "s3Client.Check", trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()
@@ -38,6 +41,8 @@ func (s *s3Client) Check(ctx context.Context) error {
 
 	return nil
 }
+
+// Upload stores or processes an uploaded avatar.
 func (s *s3Client) Upload(ctx context.Context, userID entity.Email, key string, data []byte) (*string, error) {
 	ctx, span := s.tracer.Start(ctx, "s3Client.Upload", trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()
@@ -58,6 +63,7 @@ func (s *s3Client) Upload(ctx context.Context, userID entity.Email, key string, 
 	return o.ETag, nil
 }
 
+// Download reads an object from the storage backend.
 func (s *s3Client) Download(ctx context.Context, userID entity.Email, key string) ([]byte, error) {
 	ctx, span := s.tracer.Start(ctx, "s3Client.Download", trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()
@@ -88,6 +94,7 @@ func (s *s3Client) Download(ctx context.Context, userID entity.Email, key string
 	return buf.Bytes(), nil
 }
 
+// Delete removes or marks a record as deleted.
 func (s *s3Client) Delete(ctx context.Context, userID entity.Email, key string) error {
 	ctx, span := s.tracer.Start(ctx, "s3Client.Delete", trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()

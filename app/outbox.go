@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// RunOutbox starts the outbox worker application.
 func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) error {
 	return run(name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
@@ -35,7 +36,7 @@ func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) 
 			zap.String("build_date", buildDate),
 			zap.String("commit", commit),
 			zap.String("brokers", conf.Brokers),
-			zap.Int("batch_max_size", conf.BatchMaxSize),
+			zap.Int32("batch_max_size", conf.BatchMaxSize),
 			zap.Duration("delivery_timeout", conf.DeliveryTimeout),
 			zap.Int("batch_size", conf.BatchSize),
 			zap.Duration("wait_time", conf.WaitTime),

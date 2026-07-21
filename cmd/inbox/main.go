@@ -1,3 +1,4 @@
+// Package main starts the inbox worker command.
 package main
 
 import (
@@ -7,10 +8,14 @@ import (
 )
 
 var (
-	Name      string
-	Version   string
+	// Name is the application name set at build time.
+	Name string
+	// Version is the application version set at build time.
+	Version string
+	// BuildDate is the application build date set at build time.
 	BuildDate string
-	Commit    string
+	// Commit is the source commit set at build time.
+	Commit string
 )
 
 func main() {

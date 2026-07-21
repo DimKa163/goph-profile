@@ -41,6 +41,7 @@ type limitedReader struct {
 	read    int64
 }
 
+// Read decodes bytes into the receiver.
 func (r *limitedReader) Read(p []byte) (int, error) {
 	n, err := r.reader.Read(p)
 	r.read += int64(n)
@@ -50,10 +51,12 @@ func (r *limitedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// Close releases resources.
 func (r *limitedReader) Close() error {
 	return r.reader.(io.Closer).Close()
 }
 
+// Reset restores the request body for another read.
 func (r *limitedReader) Reset(reader io.ReadCloser) {
 	r.reader = reader
 	r.read = 0

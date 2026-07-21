@@ -1,42 +1,68 @@
+// Package assets collection default images
 package assets
 
 import _ "embed"
 
+// DefaultAvatarOriginalWeb original webp
+//
 //go:embed original_default.webp
 var DefaultAvatarOriginalWeb []byte
 
+// DefaultAvatarOriginalPng original png
+//
 //go:embed original_default.png
 var DefaultAvatarOriginalPng []byte
 
+// DefaultAvatarOriginalJpeg original jpg
+//
 //go:embed original_default.jpeg
 var DefaultAvatarOriginalJpeg []byte
 
+// DefaultAvatarS300Webp 300x300 webp
+//
 //go:embed 300x300_default.webp
 var DefaultAvatarS300Webp []byte
 
+// DefaultAvatarS300Png  300x300 png
+//
 //go:embed 300x300_default.png
 var DefaultAvatarS300Png []byte
 
+// DefaultAvatarS300Jpeg 300x300 jpg
+//
 //go:embed 300x300_default.jpeg
 var DefaultAvatarS300Jpeg []byte
 
+// DefaultAvatarS100Webp 100x100 webp
+//
 //go:embed 100x100_default.webp
 var DefaultAvatarS100Webp []byte
 
+// DefaultAvatarS100Png 100x100 png
+//
 //go:embed 100x100_default.png
 var DefaultAvatarS100Png []byte
 
+// DefaultAvatarS100Jpeg 100x100 jpg
+//
 //go:embed 100x100_default.jpeg
 var DefaultAvatarS100Jpeg []byte
 
+// DefaultAvatar default avatar
 type DefaultAvatar struct {
-	Format   string
-	Size     string
+	// Format is the default avatar image format.
+	Format string
+	// Size is the default avatar image size.
+	Size string
+	// MimeType is the default avatar MIME type.
 	MimeType string
-	ETag     string
-	Data     []byte
+	// ETag is the default avatar entity tag.
+	ETag string
+	// Data contains the default avatar bytes.
+	Data []byte
 }
 
+// DefaultAvatars slice of default avatars
 var DefaultAvatars = []*DefaultAvatar{
 	{
 		Format:   "jpeg",

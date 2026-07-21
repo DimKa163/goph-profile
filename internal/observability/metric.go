@@ -1,3 +1,4 @@
+// Package observability configures telemetry, logging, metrics, and profiling.
 package observability
 
 import (
@@ -10,17 +11,25 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+// MetricStatus identifies a metric result status.
 type MetricStatus string
 
 var (
+	// Success marks a successful metric result.
 	Success MetricStatus = "success"
+	// Failure marks a failed metric result.
 	Failure MetricStatus = "failure"
 )
 
+// MetricService records profile service metrics.
+//
 //go:generate mockgen -source=metric.go -destination=mocks/mock_metric.go -package=mocks
 type MetricService interface {
+	// AvatarUploaded is the task type for uploaded avatar events.
 	AvatarUploaded(ctx context.Context, userID entity.Email, status MetricStatus)
+	// AvatarUploadDuration records avatar upload duration.
 	AvatarUploadDuration(ctx context.Context, status MetricStatus, duration time.Duration)
+	// AvatarProcessingDuration records avatar processing duration.
 	AvatarProcessingDuration(ctx context.Context, status MetricStatus, kind string, duration time.Duration)
 }
 
@@ -30,6 +39,7 @@ type metricService struct {
 	processingDuration   metric.Float64Histogram
 }
 
+// AvatarUploaded is the task type for uploaded avatar events.
 func (m *metricService) AvatarUploaded(ctx context.Context, userID entity.Email, status MetricStatus) {
 	m.avatarUploadsTotal.Add(
 		ctx,
@@ -44,6 +54,7 @@ func (m *metricService) AvatarUploaded(ctx context.Context, userID entity.Email,
 	)
 }
 
+// AvatarUploadDuration records avatar upload duration.
 func (m *metricService) AvatarUploadDuration(ctx context.Context, status MetricStatus, duration time.Duration) {
 	m.uploadDurationServer.Record(
 		ctx,
@@ -54,6 +65,7 @@ func (m *metricService) AvatarUploadDuration(ctx context.Context, status MetricS
 	)
 }
 
+// AvatarProcessingDuration records avatar processing duration.
 func (m *metricService) AvatarProcessingDuration(ctx context.Context, status MetricStatus, kind string, duration time.Duration) {
 	m.processingDuration.Record(
 		ctx,
@@ -65,6 +77,7 @@ func (m *metricService) AvatarProcessingDuration(ctx context.Context, status Met
 	)
 }
 
+// NewMetricService creates a metric service.
 func NewMetricService(name string) (MetricService, error) {
 	meter := otel.Meter(name)
 

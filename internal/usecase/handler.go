@@ -16,22 +16,29 @@ import (
 )
 
 type (
+	// Avatar defines avatar.
 	Avatar struct {
-		Name     string
-		Size     int64
+		// Name stores the name value.
+		Name string
+		// Size stores the size value.
+		Size int64
+		// MimeType stores the mime type value.
 		MimeType string
-		Reader   io.ReadSeeker
+		// Reader stores the reader value.
+		Reader io.ReadSeeker
 	}
 )
 
-type InboxHandler func(context.Context, string, []byte) error
+// InboxHandler processes an inbox event payload.
+type InboxHandler func(context.Context, []byte) error
 
+// NewUploadHandler creates an inbox handler for avatar upload events.
 func NewUploadHandler(
 	repo entity.AvatarRepository,
 	s3 entity.S3,
 	codec entity.ImageCodec,
 ) InboxHandler {
-	return func(ctx context.Context, key string, content []byte) error {
+	return func(ctx context.Context, content []byte) error {
 		var ev events.AvatarUploadedEvent
 		if err := ev.Read(content); err != nil {
 			return err
@@ -165,8 +172,9 @@ func convertToFormat(
 	return e, nil
 }
 
+// NewDeleteHandler creates an inbox handler for avatar delete events.
 func NewDeleteHandler(avatarRepo entity.AvatarRepository, s3 entity.S3) InboxHandler {
-	return func(ctx context.Context, key string, bytes []byte) error {
+	return func(ctx context.Context, bytes []byte) error {
 		var ev events.AvatarDeleted
 		if err := ev.Read(bytes); err != nil {
 			return err

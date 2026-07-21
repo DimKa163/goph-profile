@@ -13,13 +13,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// RootHandler resolves a handler for an event or task type.
 type RootHandler func(ctx context.Context, eventType string) (usecase.InboxHandler, error)
 
 type failedResult struct {
-	Err    error
+	// Err stores the err value.
+	Err error
+	// Record stores the record value.
 	Record *kgo.Record
 }
 
+// AvatarUploadedEventWorker consumes avatar event records.
 func AvatarUploadedEventWorker(ctx context.Context, tracer *kotel.Tracer, h IdempotencyHandler, root RootHandler, cl *kgo.Client) func() error {
 	logger := logging.Logger(ctx)
 	clientID := cl.OptValue("ClientID").(string)
@@ -77,7 +81,7 @@ func AvatarUploadedEventWorker(ctx context.Context, tracer *kotel.Tracer, h Idem
 					if err != nil {
 						return err
 					}
-					if err = handler(timeoutCtx, string(record.Key), record.Value); err != nil {
+					if err = handler(timeoutCtx, record.Value); err != nil {
 						return err
 					}
 					return nil

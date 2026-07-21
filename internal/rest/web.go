@@ -11,31 +11,42 @@ import (
 	"go.uber.org/zap"
 )
 
+// Image describes an image returned to templates or callers.
 type Image struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Inactive bool   `json:"inactive"`
+	// ID stores the identifier.
+	ID string `json:"id"`
+	// Name stores the name value.
+	Name string `json:"name"`
+	// Inactive stores the inactive value.
+	Inactive bool `json:"inactive"`
+	// Original stores the original value.
 	Original string `json:"original"`
-	S300     string `json:"s300"`
-	S100     string `json:"s100"`
+	// S300 stores the s300 value.
+	S300 string `json:"s300"`
+	// S100 stores the s100 value.
+	S100 string `json:"s100"`
 }
 type webController struct {
 	userService *usecase.UserService
 }
 
+// NewWebController creates a web controller.
 func NewWebController(userServices *usecase.UserService) *webController {
 	return &webController{userService: userServices}
 }
 
+// Register registers routes on the Echo group.
 func (w *webController) Register(e Section) {
 	e.GET("/web/upload", w.Index)
 	e.GET("/web/gallery/:userId", w.Gallery)
 }
 
+// Index renders the index page.
 func (w *webController) Index(c echo.Context) error {
 	return c.File("web/static/index.html")
 }
 
+// Gallery renders the avatar gallery page.
 func (w *webController) Gallery(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userIDStr := c.Param("userId")

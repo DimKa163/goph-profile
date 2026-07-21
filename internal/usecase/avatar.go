@@ -1,3 +1,4 @@
+// Package usecase contains profile application use cases.
 package usecase
 
 import (
@@ -20,25 +21,40 @@ import (
 
 const maxAvatarSize = 10 * 1024 * 1024
 
+// ErrAvatarNotModified is returned when an avatar matches the request tag.
 var ErrAvatarNotModified = errors.New("avatar not modified")
 
+// Transactor describes transactional execution.
 type Transactor interface {
+	// WithTx executes fn inside a transaction.
 	WithTx(ctx context.Context, fn func(context.Context) error) error
 }
 type (
+	// UploadCommand contains avatar upload input.
 	UploadCommand struct {
+		// FileName stores the file name value.
 		FileName string
-		UserID   entity.Email
-		Size     int64
+		// UserID stores the user identifier.
+		UserID entity.Email
+		// Size stores the size value.
+		Size int64
+		// MimeType stores the mime type value.
 		MimeType string
-		Buf      []byte
+		// Buf stores the upload bytes.
+		Buf []byte
 	}
+	// Request contains avatar image selection options.
 	Request struct {
-		ID     entity.AvatarID
+		// ID stores the identifier.
+		ID entity.AvatarID
+		// Format stores the format value.
 		Format string
-		Size   entity.Size
+		// Size stores the size value.
+		Size entity.Size
 	}
 )
+
+// AvatarService provides avatar use cases.
 type AvatarService struct {
 	tx       Transactor
 	repo     entity.AvatarRepository
@@ -47,6 +63,7 @@ type AvatarService struct {
 	codec    entity.ImageCodec
 }
 
+// NewAvatarService creates an avatar service.
 func NewAvatarService(tx Transactor, repo entity.AvatarRepository, taskRepo entity.TaskRepository, s3 entity.S3, codec entity.ImageCodec) *AvatarService {
 	return &AvatarService{
 		tx:       tx,
@@ -57,6 +74,7 @@ func NewAvatarService(tx Transactor, repo entity.AvatarRepository, taskRepo enti
 	}
 }
 
+// Metadata describes avatar metadata returned by the API.
 func (s *AvatarService) Metadata(ctx context.Context, id entity.AvatarID) (*entity.Avatar, error) {
 	e, err := s.repo.Find(ctx, id)
 	if err != nil {
@@ -68,6 +86,7 @@ func (s *AvatarService) Metadata(ctx context.Context, id entity.AvatarID) (*enti
 	return e, nil
 }
 
+// Get returns the requested avatar image.
 func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*entity.Image, []byte, error) {
 	var err error
 	var avatar *entity.Avatar
@@ -111,6 +130,7 @@ func (s *AvatarService) Get(ctx context.Context, eTag string, req *Request) (*en
 	return e, src, nil
 }
 
+// Upload stores or processes an uploaded avatar.
 func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.Avatar, error) {
 	if err := validateAvatarSize(uc.Size); err != nil {
 		return nil, err
@@ -179,6 +199,7 @@ func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.
 	return e, nil
 }
 
+// Delete removes or marks a record as deleted.
 func (s *AvatarService) Delete(ctx context.Context, id entity.AvatarID, userID entity.Email) error {
 	meta, err := s.Metadata(ctx, id)
 	if err != nil {

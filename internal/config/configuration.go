@@ -1,3 +1,4 @@
+// Package config app settings
 package config
 
 import (
@@ -19,25 +20,43 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+// GophConfig app configuration
 type GophConfig struct {
-	Addr            string        `env:"GOPH_ADDR" envDefault:":8080"`
-	Database        string        `env:"GOPH_DATABASE" envDefault:"goph"`
-	Brokers         string        `env:"GOPH_BROKERS"`
-	BatchMaxSize    int           `env:"GOPH_BATCH_MAX_SIZE" envDefault:"1024"`
-	Bucket          string        `env:"GOPH_BUCKET" envDefault:"goph"`
-	Region          string        `env:"GOPH_REGION" envDefault:"us-east-1"`
-	Endpoint        string        `env:"GOPH_ENDPOINT"`
-	AccessKey       string        `env:"GOPH_ACCESS_KEY"`
-	SecretKey       string        `env:"GOPH_SECRET_KEY"`
-	UseSSL          bool          `env:"GOPH_USE_SSL" envDefault:"false"`
+	// Addr is the HTTP listen address.
+	Addr string `env:"GOPH_ADDR" envDefault:":8080"`
+	// Database is the PostgreSQL connection string.
+	Database string `env:"GOPH_DATABASE" envDefault:"goph"`
+	// Brokers is the Kafka broker list.
+	Brokers string `env:"GOPH_BROKERS"`
+	// BatchMaxSize is the Kafka producer batch size limit.
+	BatchMaxSize int32 `env:"GOPH_BATCH_MAX_SIZE" envDefault:"1024"`
+	// Bucket is the S3 bucket name.
+	Bucket string `env:"GOPH_BUCKET" envDefault:"goph"`
+	// Region is the S3 region.
+	Region string `env:"GOPH_REGION" envDefault:"us-east-1"`
+	// Endpoint is the S3-compatible endpoint.
+	Endpoint string `env:"GOPH_ENDPOINT"`
+	// AccessKey is the S3 access key.
+	AccessKey string `env:"GOPH_ACCESS_KEY"`
+	// SecretKey is the S3 secret key.
+	SecretKey string `env:"GOPH_SECRET_KEY"`
+	// UseSSL enables SSL for S3 connections.
+	UseSSL bool `env:"GOPH_USE_SSL" envDefault:"false"`
+	// DeliveryTimeout is the Kafka delivery timeout.
 	DeliveryTimeout time.Duration `env:"GOPH_DELIVERY_TIMEOUT" envDefault:"10s"`
-	Group           string        `env:"GOPH_GROUP" envDefault:"profile"`
-	AutoCommit      bool          `env:"GOPH_AUTOCOMMIT" envDefault:"false"`
-	BatchSize       int           `env:"GOPH_BATCH_SIZE" envDefault:"100"`
-	WaitTime        time.Duration `env:"GOPH_WAIT_TIME" envDefault:"10s"`
-	Workers         int           `env:"GOPH_WORKERS" envDefault:"0"`
+	// Group is the Kafka consumer group.
+	Group string `env:"GOPH_GROUP" envDefault:"profile"`
+	// AutoCommit enables Kafka offset autocommit.
+	AutoCommit bool `env:"GOPH_AUTOCOMMIT" envDefault:"false"`
+	// BatchSize is the worker processing batch size.
+	BatchSize int `env:"GOPH_BATCH_SIZE" envDefault:"100"`
+	// WaitTime is the worker polling interval.
+	WaitTime time.Duration `env:"GOPH_WAIT_TIME" envDefault:"10s"`
+	// Workers is the number of worker routines or producer clients.
+	Workers int `env:"GOPH_WORKERS" envDefault:"0"`
 }
 
+// CreatePg configure postgresql-client
 func (c GophConfig) CreatePg(ctx context.Context) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(c.Database)
 	if err != nil {
@@ -55,6 +74,7 @@ func (c GophConfig) CreatePg(ctx context.Context) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// CreateS3 configure s3-client
 func (c GophConfig) CreateS3(ctx context.Context) (*s3.Client, error) {
 	cfg, err := s3config.LoadDefaultConfig(
 		ctx,
@@ -74,6 +94,7 @@ func (c GophConfig) CreateS3(ctx context.Context) (*s3.Client, error) {
 	return client, nil
 }
 
+// ProducerPool configure producer pool
 func (c GophConfig) ProducerPool(ctx context.Context) *kafka.KafkaProducerPool {
 	if c.Workers == 0 {
 		c.Workers = runtime.GOMAXPROCS(0) * 4
@@ -83,6 +104,7 @@ func (c GophConfig) ProducerPool(ctx context.Context) *kafka.KafkaProducerPool {
 	})
 }
 
+// Producer configure producer
 func (c GophConfig) Producer(ctx context.Context) (*kgo.Client, error) {
 	kotelTracer := kotel.NewTracer(
 		kotel.TracerProvider(otel.GetTracerProvider()),
@@ -96,7 +118,7 @@ func (c GophConfig) Producer(ctx context.Context) (*kgo.Client, error) {
 		kgo.SeedBrokers(c.Brokers),
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.RecordDeliveryTimeout(c.DeliveryTimeout),
-		kgo.ProducerBatchMaxBytes(int32(c.BatchMaxSize)*1024),
+		kgo.ProducerBatchMaxBytes(c.BatchMaxSize*1024),
 		kgo.ProducerLinger(100*time.Millisecond),
 		kgo.RecordPartitioner(kgo.StickyKeyPartitioner(nil)),
 		kgo.RecordRetries(7),
@@ -111,6 +133,7 @@ func (c GophConfig) Producer(ctx context.Context) (*kgo.Client, error) {
 	return client, nil
 }
 
+// Consumer configure consumer
 func (c GophConfig) Consumer(ctx context.Context, kotel *kotel.Kotel, clientID string, topics ...string) (*kgo.Client, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(c.Brokers),
@@ -134,9 +157,11 @@ func (c GophConfig) Consumer(ctx context.Context, kotel *kotel.Kotel, clientID s
 	return client, nil
 }
 
+// Server configure web-server
 func (c GophConfig) Server(handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:    c.Addr,
-		Handler: handler,
+		Addr:        c.Addr,
+		Handler:     handler,
+		ReadTimeout: 5 * time.Second,
 	}
 }

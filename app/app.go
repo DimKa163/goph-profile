@@ -1,3 +1,4 @@
+// Package app wires and starts the profile service applications.
 package app
 
 import (

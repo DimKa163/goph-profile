@@ -6,18 +6,28 @@ import (
 	"strings"
 )
 
+// ErrorCode identifies a profile error category.
 type ErrorCode int
 
 const (
+	// InternalErrorCode indicates an internal error.
 	InternalErrorCode ErrorCode = iota
+	// InvalidAvatarIDErrorCode indicates an invalid avatar ID.
 	InvalidAvatarIDErrorCode
+	// InvalidUserIDErrorCode indicates an invalid user ID.
 	InvalidUserIDErrorCode
+	// InvalidContentTypeErrorCode indicates an unsupported content type.
 	InvalidContentTypeErrorCode
+	// InvalidSizeErrorCode indicates an invalid size.
 	InvalidSizeErrorCode
+	// NotFoundEntityErrorCode indicates that an entity was not found.
 	NotFoundEntityErrorCode
+
+	// PermissionDeniedErrorCode indicates a permission denied error.
 	PermissionDeniedErrorCode
 )
 
+// String returns the string representation of the error code.
 func (e ErrorCode) String() string {
 	return [...]string{
 		"internal",
@@ -30,24 +40,36 @@ func (e ErrorCode) String() string {
 	}[e]
 }
 
+// ErrInternalError is the sentinel error for internal failures.
 var ErrInternalError = errors.New("internal error")
 
+// ErrInvalidAvatarID is the sentinel error for invalid avatar IDs.
 var ErrInvalidAvatarID = errors.New("invalid avatar id")
 
+// ErrInvalidUserID is the sentinel error for invalid user IDs.
 var ErrInvalidUserID = errors.New("invalid user id")
 
+// ErrInvalidSize is the sentinel error for invalid sizes.
 var ErrInvalidSize = errors.New("invalid size")
 
+// ErrInvalidContentErrorMessage is the sentinel error for unsupported content types.
 var ErrInvalidContentErrorMessage = errors.New("invalid content type")
 
+// ErrNotFoundEntity is the sentinel error for missing entities.
 var ErrNotFoundEntity = errors.New("entity not found")
 
+// ErrPermissionDenied is the sentinel error for permission denied failures.
 var ErrPermissionDenied = errors.New("permission denied")
 
+// ProfileError describes a profile domain error with an optional cause.
 type ProfileError struct {
-	Cause   error
-	Kind    error
-	Code    ErrorCode
+	// Cause stores the cause value.
+	Cause error
+	// Kind stores the kind value.
+	Kind error
+	// Code stores the code value.
+	Code ErrorCode
+	// Message stores the message value.
 	Message string
 }
 
@@ -60,6 +82,7 @@ func newProfileError(cause error, kind error, code ErrorCode, message string) *P
 	}
 }
 
+// Error returns the profile error message.
 func (pe *ProfileError) Error() string {
 	if pe == nil {
 		return "<nil>"
@@ -82,6 +105,7 @@ func (pe *ProfileError) Error() string {
 	return strings.Join(parts, ": ")
 }
 
+// Unwrap returns the underlying cause and kind errors.
 func (pe *ProfileError) Unwrap() []error {
 	if pe == nil {
 		return nil
@@ -100,6 +124,7 @@ func (pe *ProfileError) Unwrap() []error {
 	return errs
 }
 
+// WrapError wraps err into a ProfileError for the provided error code.
 func WrapError(code ErrorCode, args any, err error) error {
 	switch code {
 	case InternalErrorCode:
