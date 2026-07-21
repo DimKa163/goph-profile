@@ -33,7 +33,7 @@ tasks:
           fi
         
           echo "Running golangci-lint..."
-          "$LINT" run --config=.golangci.yml
+          "$LINT" run --config=golangci.yml
         else 
           if [ ! -x "{{.GOBIN}}/golangci-lint" ]; then
             echo "golangci-lint not found. Installing..."
@@ -42,7 +42,7 @@ tasks:
           fi
         
           echo "Running golangci-lint..."
-          "{{.GOBIN}}/golangci-lint" run --config=.golangci.yml
+          "{{.GOBIN}}/golangci-lint" run --config=golangci.yml
         fi
 
   go-fmt:
