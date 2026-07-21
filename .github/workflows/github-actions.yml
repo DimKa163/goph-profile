@@ -17,11 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-go
+      - name: installing task
+        run: go install github.com/go-task/task/v3/cmd/task@latest
+
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
 
       - name: Vet
-        run: go vet ./...
+        run: task go-lint
 
 
   test:
