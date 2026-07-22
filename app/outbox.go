@@ -26,7 +26,7 @@ func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) 
 			logger.Fatal("failed to ping postgres", zap.Error(err))
 		}
 		app := outbox.New(otel.Tracer("outbox"), infra.NewTX(retryablePool), infra.NewTaskRepository(retryablePool))
-		producerPool := conf.ProducerPool(ctx)
+		producerPool := conf.ProducerPool(ctx, name)
 		defer producerPool.Close()
 		logger.Info("outbox started",
 			zap.String("name", name),
