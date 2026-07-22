@@ -156,8 +156,8 @@ func (s *AvatarService) Upload(ctx context.Context, uc *UploadCommand) (*entity.
 		if err != nil {
 			logger := logging.Logger(ctx)
 			logger.Debug(" error occurred during transaction. trying to clean up storage")
-			if err = s.s3.Delete(ctx, uc.UserID, s3Key); err != nil {
-				logger.Error("error occurred during cleaning storage", zap.Error(err))
+			if delErr := s.s3.Delete(ctx, uc.UserID, s3Key); delErr != nil {
+				logger.Error("error occurred during cleaning storage", zap.Error(delErr))
 			}
 		}
 	}()

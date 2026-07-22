@@ -33,35 +33,29 @@ func RunServer(conf config.GophConfig, name, version, buildDate, commit string) 
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {
 			log.Fatal("failed to create postgres pool", zap.Error(err))
-			return err
 		}
 		if err = infra.Migrate(pgpool, "./migrations"); err != nil {
 			log.Fatal("failed to migrate", zap.Error(err))
-			return err
 		}
 		defer pgpool.Close()
 		retryablePool := retryablepgxpool.New(pgpool)
 		if err = retryablePool.Ping(ctx); err != nil {
 			log.Fatal("failed to ping postgres", zap.Error(err))
-			return err
 		}
 
 		s3Client, err := conf.CreateS3(ctx)
 		if err != nil {
 			log.Fatal("failed to create S3 client", zap.Error(err))
-			return err
 		}
 
 		err = observability.UseStorageUsageObserver(name, retryablePool)
 		if err != nil {
 			log.Fatal("failed to create usage observer", zap.Error(err))
-			return err
 		}
 
 		metricService, err := observability.NewMetricService(name)
 		if err != nil {
 			log.Fatal("failed to create metric service", zap.Error(err))
-			return err
 		}
 
 		s3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
@@ -140,7 +134,7 @@ func RunServer(conf config.GophConfig, name, version, buildDate, commit string) 
 				log.Error("failed to ping postgres", zap.Error(err))
 				state.Db = false
 			}
-			if err := s3.Check(ctx); err != nil {
+			if err := s3.Check(c.Request().Context()); err != nil {
 				log.Error("failed to check S3 connection", zap.Error(err))
 				state.S3 = false
 			}

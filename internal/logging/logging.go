@@ -10,11 +10,11 @@ import (
 type loggerKey struct{}
 
 // Key is the context key used to store a logger.
-var Key = loggerKey{}
+var key = loggerKey{}
 
 // Logger returns the logger stored in ctx or a default logger.
 func Logger(ctx context.Context) *zap.Logger {
-	logger, ok := ctx.Value(Key).(*zap.Logger)
+	logger, ok := ctx.Value(key).(*zap.Logger)
 	if !ok || logger == nil {
 		return zap.NewNop()
 	}
@@ -23,5 +23,5 @@ func Logger(ctx context.Context) *zap.Logger {
 
 // SetLogger stores logger in ctx.
 func SetLogger(ctx context.Context, logger *zap.Logger) context.Context {
-	return context.WithValue(ctx, Key, logger)
+	return context.WithValue(ctx, key, logger)
 }

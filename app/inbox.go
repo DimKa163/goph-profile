@@ -26,24 +26,20 @@ func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) e
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {
 			logger.Fatal("failed to create postgres pool", zap.Error(err))
-			return err
 		}
 		defer pgpool.Close()
 		retryablePool := retryablepgxpool.New(pgpool)
 		if err = retryablePool.Ping(ctx); err != nil {
 			logger.Fatal("failed to ping postgres", zap.Error(err))
-			return err
 		}
 		s3Client, err := conf.CreateS3(ctx)
 		if err != nil {
 			logger.Fatal("failed to get hostname", zap.Error(err))
-			return err
 		}
 
 		metricService, err := observability.NewMetricService(name)
 		if err != nil {
 			logger.Fatal("failed to create metric service", zap.Error(err))
-			return err
 		}
 
 		s3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
@@ -54,7 +50,6 @@ func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) e
 		n, err := os.Hostname()
 		if err != nil {
 			logger.Fatal("failed to get hostname", zap.Error(err))
-			return err
 		}
 		clientID := fmt.Sprintf("%s-%s", conf.Group, n)
 		kotelTracer := kotel.NewTracer(
@@ -70,7 +65,6 @@ func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) e
 		consumer, err := conf.Consumer(ctx, kotelService, clientID, "avatar")
 		if err != nil {
 			logger.Fatal("failed to create consumer", zap.Error(err))
-			return err
 		}
 		logger.Info("inbox started",
 			zap.String("name", name),

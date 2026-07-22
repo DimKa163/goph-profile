@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	// StorageUsageStmt defines the storage usage stmt value.
-	StorageUsageStmt = `
+	// storageUsageStmt defines the storage usage stmt value.
+	storageUsageStmt = `
 						SELECT avatars.user_id, COALESCE(SUM(images.file_size), 0)::BIGINT from public.images
 						JOIN public.avatars ON images.avatar_id = public.avatars.id
 						WHERE avatars.deleted_at IS NULL
@@ -39,7 +39,7 @@ func UseStorageUsageObserver(name string, pool *retryablepgxpool.Pool) error {
 
 func observeStorageUsage(pool *retryablepgxpool.Pool, storageUsage metric.Int64ObservableGauge) metric.Callback {
 	return func(ctx context.Context, observer metric.Observer) error {
-		rows, err := pool.Query(ctx, StorageUsageStmt)
+		rows, err := pool.Query(ctx, storageUsageStmt)
 		if err != nil {
 			return err
 		}

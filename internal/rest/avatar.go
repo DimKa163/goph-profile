@@ -59,18 +59,15 @@ func (a *avatarController) Avatar(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	img, err := c.FormFile("image")
 	if err != nil {
-		logger.Error("error getting image", zap.Error(err))
 		return Error(c, err)
 	}
 	userID, err = entity.ParseEmail(c.Request().Header.Get("X-User-Id"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	src, err := img.Open()
 	if err != nil {
-		logger.Error("error opening image", zap.Error(err))
 		return Error(c, err)
 	}
 	defer func() {
@@ -120,7 +117,6 @@ func (a *avatarController) Get(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
-		logger.Error("error parsing avatar id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -148,13 +144,11 @@ func (a *avatarController) Delete(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
-		logger.Error("error parsing avatar id", zap.Error(err))
 		return Error(c, err)
 	}
 
 	userID, err := entity.ParseEmail(c.Request().Header.Get("X-User-Id"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -170,7 +164,6 @@ func (a *avatarController) Metadata(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	avatarID, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
-		logger.Error("error parsing avatar id", zap.Error(err))
 		return Error(c, err)
 	}
 

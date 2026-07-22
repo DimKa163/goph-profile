@@ -34,7 +34,6 @@ func (u *userController) Avatar(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -85,7 +84,6 @@ func (u *userController) Avatars(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -109,7 +107,6 @@ func (u *userController) Delete(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 

@@ -14,7 +14,7 @@ import (
 // MetricStatus identifies a metric result status.
 type MetricStatus string
 
-var (
+const (
 	// Success marks a successful metric result.
 	Success MetricStatus = "success"
 	// Failure marks a failed metric result.

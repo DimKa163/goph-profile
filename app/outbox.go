@@ -19,13 +19,11 @@ func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) 
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {
 			logger.Fatal("failed to create postgres pool", zap.Error(err))
-			return err
 		}
 		defer pgpool.Close()
 		retryablePool := retryablepgxpool.New(pgpool)
 		if err = retryablePool.Ping(ctx); err != nil {
 			logger.Fatal("failed to ping postgres", zap.Error(err))
-			return err
 		}
 		app := outbox.New(otel.Tracer("outbox"), infra.NewTX(retryablePool), infra.NewTaskRepository(retryablePool))
 		producerPool := conf.ProducerPool(ctx)
