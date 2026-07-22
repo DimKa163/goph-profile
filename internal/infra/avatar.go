@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	// FindStmt defines the find stmt value.
 	findStmt = `SELECT 
     				id, 
     				avatars.created_at, 
@@ -34,7 +33,6 @@ const (
 				FROM avatars
 				LEFT JOIN public.images ON avatars.id = images.avatar_id
 				WHERE id = $1 AND deleted_at IS NULL;`
-	// FindByUserIDStmt defines the query for finding an avatar by user ID.
 	findByUserIDStmt = `SELECT
     				id, 
     				avatars.created_at, 
@@ -56,7 +54,6 @@ const (
 				FROM avatars
 				LEFT JOIN public.images ON avatars.id = images.avatar_id
 				WHERE user_id = $1 AND inactive = false AND deleted_at IS NULL;`
-	// ListByUserIDStmt defines the query for listing avatars by user ID.
 	listByUserIDStmt = `SELECT
     				id, 
     				avatars.created_at, 
@@ -79,7 +76,6 @@ const (
 				LEFT JOIN public.images ON avatars.id = images.avatar_id
 				WHERE user_id = $1 AND deleted_at IS NULL
 				ORDER BY avatars.id ASC;`
-	// FindImageStmt defines the find image stmt value.
 	findImageStmt = `SELECT
 					format, 
 					size, 
@@ -91,18 +87,13 @@ const (
 					FROM public.images
 					WHERE avatar_id = $1
 					ORDER BY created_at ASC;`
-	// InsertAvatarMetadataStmt defines the insert avatar metadata stmt value.
 	insertAvatarMetadataStmt = `INSERT INTO public.avatars(id, name, user_id, width, height, file_size, mime_type, inactive) 
 								VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at, updated_at, name, user_id, width, height, file_size, mime_type, inactive;`
-	// InsertImageMetadataStmt defines the insert image metadata stmt value.
 	insertImageMetadataStmt = `INSERT INTO public.images(avatar_id, format, size, file_size, mime_type, s3_key, e_tag) VALUES ($1, $2, $3, $4, $5, $6, $7) 
 								ON CONFLICT(avatar_id, format, size) DO NOTHING
 								RETURNING format, size, file_size, mime_type, s3_key, e_tag, created_at;`
-	// DeleteStmt defines the delete stmt value.
-	deleteStmt = `UPDATE public.avatars SET inactive=true, deleted_at=now(), updated_at=now() WHERE id=$1 AND deleted_at IS NULL;`
-	// DeleteImagesStmt defines the delete images stmt value.
-	deleteImagesStmt = `DELETE FROM public.images WHERE avatar_id = $1;`
-	// DeactivateUserAvatarsExceptStmt defines the deactivate user avatars except stmt value.
+	deleteStmt                      = `UPDATE public.avatars SET inactive=true, deleted_at=now(), updated_at=now() WHERE id=$1 AND deleted_at IS NULL;`
+	deleteImagesStmt                = `DELETE FROM public.images WHERE avatar_id = $1;`
 	deactivateUserAvatarsExceptStmt = `UPDATE public.avatars
 						SET inactive = TRUE,
 						updated_at = now()
@@ -110,7 +101,6 @@ const (
   							AND id <> $2
   							AND inactive = FALSE
   							AND deleted_at IS NULL;`
-	// ActivateUserAvatarStmt defines the activate user avatar stmt value.
 	activateUserAvatarStmt = `UPDATE public.avatars
 							SET inactive = FALSE,
     						updated_at = now()

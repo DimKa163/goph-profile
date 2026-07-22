@@ -48,6 +48,14 @@ type GophConfig struct {
 	Group string `env:"GOPH_GROUP" envDefault:"profile"`
 	// AutoCommit enables Kafka offset autocommit.
 	AutoCommit bool `env:"GOPH_AUTOCOMMIT" envDefault:"false"`
+	// FetchMaxWait wait time between fetches
+	FetchMaxWait time.Duration `env:"GOPH_FETCH_MAX_WAIT" envDefault:"100ms"`
+	// FetchMinBytes min bytes to fetch
+	FetchMinBytes int32 `env:"GOPH_FETCH_MIN_BYTES" envDefault:"1"`
+	// FetchMaxBytes min bytes to fetch
+	FetchMaxBytes int32 `env:"GOPH_FETCH_MAX_BYTES" envDefault:"10485760"`
+	// KafkaRetryCount retry count
+	KafkaRetryCount int `env:"GOPH_KAFKA_RETRY_COUNT" envDefault:"7"`
 	// BatchSize is the worker processing batch size.
 	BatchSize int `env:"GOPH_BATCH_SIZE" envDefault:"100"`
 	// WaitTime is the worker polling interval.
@@ -95,21 +103,21 @@ func (c GophConfig) CreateS3(ctx context.Context) (*s3.Client, error) {
 }
 
 // ProducerPool configure producer pool
-func (c GophConfig) ProducerPool(ctx context.Context) *kafka.KafkaProducerPool {
+func (c GophConfig) ProducerPool(ctx context.Context, clientID string) *kafka.KafkaProducerPool {
 	if c.Workers == 0 {
 		c.Workers = runtime.GOMAXPROCS(0) * 4
 	}
 	return kafka.NewKafkaProducerPool(c.Workers, func() (*kgo.Client, error) {
-		return c.Producer(ctx)
+		return c.Producer(ctx, clientID)
 	})
 }
 
 // Producer configure producer
-func (c GophConfig) Producer(ctx context.Context) (*kgo.Client, error) {
+func (c GophConfig) Producer(ctx context.Context, clientID string) (*kgo.Client, error) {
 	kotelTracer := kotel.NewTracer(
 		kotel.TracerProvider(otel.GetTracerProvider()),
 		kotel.TracerPropagator(otel.GetTextMapPropagator()),
-		kotel.ClientID("goph-outbox"),
+		kotel.ClientID(clientID),
 	)
 	kotelService := kotel.NewKotel(
 		kotel.WithTracer(kotelTracer),
@@ -119,9 +127,8 @@ func (c GophConfig) Producer(ctx context.Context) (*kgo.Client, error) {
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.RecordDeliveryTimeout(c.DeliveryTimeout),
 		kgo.ProducerBatchMaxBytes(c.BatchMaxSize*1024),
-		kgo.ProducerLinger(100*time.Millisecond),
 		kgo.RecordPartitioner(kgo.StickyKeyPartitioner(nil)),
-		kgo.RecordRetries(7),
+		kgo.RecordRetries(c.KafkaRetryCount),
 		kgo.WithHooks(kotelService.Hooks()...),
 	)
 	if err != nil {
@@ -142,10 +149,11 @@ func (c GophConfig) Consumer(ctx context.Context, kotel *kotel.Kotel, clientID s
 		kgo.ClientID(clientID),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 		kgo.DisableAutoCommit(),
-		kgo.FetchMaxWait(100*time.Millisecond),
-		kgo.FetchMinBytes(1),
-		kgo.FetchMaxBytes(10*1024*1024),
+		kgo.FetchMaxWait(c.FetchMaxWait),
+		kgo.FetchMinBytes(c.FetchMinBytes),
+		kgo.FetchMaxBytes(c.FetchMaxBytes),
 		kgo.RecordDeliveryTimeout(c.DeliveryTimeout),
+		kgo.RecordRetries(c.KafkaRetryCount),
 		kgo.WithHooks(kotel.Hooks()...),
 	)
 	if err != nil {
@@ -160,8 +168,9 @@ func (c GophConfig) Consumer(ctx context.Context, kotel *kotel.Kotel, clientID s
 // Server configure web-server
 func (c GophConfig) Server(handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:        c.Addr,
-		Handler:     handler,
-		ReadTimeout: 5 * time.Second,
+		Addr:              c.Addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
 	}
 }
