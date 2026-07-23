@@ -3,7 +3,8 @@
 version: '3'
 
 vars:
-  GREETING: Hello, world!
+  GOBIN: '{{.ROOT_DIR}}/bin'
+  GOLANGCI_LINT_VERSION: 'v2.12.0'
 
 tasks:
   go-test:
@@ -21,14 +22,30 @@ tasks:
   go-lint:
     desc: "Run golangci-lint"
     cmds:
-      - golangci-lint run ./...
+      - |
+        if [ "${OS:-}" = "Windows_NT" ]; then
+          LINT="{{.GOBIN}}/golangci-lint.exe"
+        
+          if [ ! -f "$LINT" ]; then
+            echo "golangci-lint not found. Installing..."
+            mkdir -p "{{.GOBIN}}"
+            GOBIN="{{.GOBIN}}" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
+          fi
+        
+          echo "Running golangci-lint..."
+          "$LINT" run --config=golangci.yml
+        else 
+          if [ ! -x "{{.GOBIN}}/golangci-lint" ]; then
+            echo "golangci-lint not found. Installing..."
+            mkdir -p "{{.GOBIN}}"
+            GOBIN="{{.GOBIN}}" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
+          fi
+        
+          echo "Running golangci-lint..."
+          "{{.GOBIN}}/golangci-lint" run --config=golangci.yml
+        fi
 
   go-fmt:
     cmd:
       go fmt ./...
 
-  default:
-    desc: Print a greeting message
-    cmds:
-      - echo "{{.GREETING}}"
-    silent: true

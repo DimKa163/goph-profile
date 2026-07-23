@@ -1,0 +1,122 @@
+name: goph-profile
+run-name: testing goph-profile
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-go
+      - name: installing task
+        run: go install github.com/go-task/task/v3/cmd/task@latest
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: task go-lint
+
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-go
+
+      - name: Run tests
+        run: go test -race -cover ./...
+
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+        include:
+          - os: ubuntu-latest
+            server_binary: goph-server-linux
+            outbox_binary: goph-outbox-linux
+            inbox_binary: goph-inbox-linux
+          - os: windows-latest
+            server_binary: goph-server.exe
+            outbox_binary: goph-outbox.exe
+            inbox_binary: goph-inbox.exe
+
+    needs: [ lint, test ]
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-go
+
+      - name: Build server-app
+        shell: bash
+        run: |
+          mkdir -p build
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT="${GITHUB_SHA::7}"
+          VERSION="${GITHUB_REF_NAME}"
+
+          go build \
+            -ldflags="-X 'main.Name=goph-server' -X 'main.Version=${VERSION}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.Commit=${COMMIT}'" \
+            -o "build/${{ matrix.server_binary }}" \
+            ./cmd/server
+
+      - name: Server artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.server_binary }}
+          path: build/${{ matrix.server_binary }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Build outbox-app
+        shell: bash
+        run: |
+          mkdir -p build
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT="${GITHUB_SHA::7}"
+          VERSION="${GITHUB_REF_NAME}"
+
+          go build \
+            -ldflags="-X 'main.Name=goph-outbox' -X 'main.Version=${VERSION}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.Commit=${COMMIT}'" \
+            -o "build/${{ matrix.outbox_binary }}" \
+            ./cmd/outbox
+
+      - name: Outbox artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.outbox_binary }}
+          path: build/${{ matrix.outbox_binary }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Build inbox-app
+        shell: bash
+        run: |
+          mkdir -p build
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT="${GITHUB_SHA::7}"
+          VERSION="${GITHUB_REF_NAME}"
+
+          go build \
+            -ldflags="-X 'main.Name=goph-inbox' -X 'main.Version=${VERSION}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.Commit=${COMMIT}'" \
+            -o "build/${{ matrix.inbox_binary }}" \
+            ./cmd/inbox
+
+      - name: Inbox artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.inbox_binary }}
+          path: build/${{ matrix.inbox_binary }}
+          retention-days: 30
+          if-no-files-found: error

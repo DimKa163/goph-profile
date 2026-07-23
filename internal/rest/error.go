@@ -9,12 +9,16 @@ import (
 )
 
 type (
+	// ServiceError is an API error response.
 	ServiceError struct {
+		// Message stores the message value.
 		Message string `json:"message"`
-		Code    string `json:"code"`
+		// Code stores the code value.
+		Code string `json:"code"`
 	}
 )
 
+// Error returns the error message.
 func Error(c echo.Context, err error) error {
 	if errors.Is(err, http.ErrMissingFile) {
 		return c.JSON(http.StatusBadRequest, ServiceError{

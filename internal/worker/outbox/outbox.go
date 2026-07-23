@@ -1,3 +1,4 @@
+// Package outbox contains outbox worker processing.
 package outbox
 
 import (
@@ -8,36 +9,48 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
 type (
+	// Transactor describes transactional execution.
 	Transactor interface {
+		// WithTx executes fn inside a transaction.
 		WithTx(ctx context.Context, fn func(context.Context) error) error
 	}
+	// Outbox describes outbox task persistence operations.
 	Outbox interface {
+		// Start starts processing.
 		Start(ctx context.Context, workers []kafka.Producer, batchSize int, waitTime, ttl time.Duration)
 	}
 )
 
 var _ Outbox = (*outboxImpl)(nil)
 
+// TypeHandler publishes a task payload.
 type TypeHandler func(ctx context.Context, key []byte, buffer []byte, headers ...kafka.Header) error
 
+// RootHandler resolves a handler for an event or task type.
 type RootHandler func(t entity.TaskType) (TypeHandler, error)
 
 type outboxImpl struct {
+	tracer     trace.Tracer
 	transactor Transactor
 	taskRepo   entity.TaskRepository
 }
 
-func New(tx Transactor, taskRepo entity.TaskRepository) *outboxImpl {
+// New creates an outbox worker.
+func New(tracer trace.Tracer, tx Transactor, taskRepo entity.TaskRepository) *outboxImpl {
 	return &outboxImpl{
+		tracer:     tracer,
 		transactor: tx,
 		taskRepo:   taskRepo,
 	}
 }
 
+// Start starts processing.
 func (o *outboxImpl) Start(ctx context.Context, workers []kafka.Producer, batchSize int, waitTime, ttl time.Duration) {
 	var wg sync.WaitGroup
 	for w := 0; len(workers) > w; w++ {
@@ -58,6 +71,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			ctx, span := o.tracer.Start(ctx, "outbox read tasks")
 			logger := logging.Logger(ctx)
 			if err := o.transactor.WithTx(ctx, func(ctx context.Context) error {
 				m, err := o.taskRepo.GetAll(ctx, ttl, batchSize)
@@ -72,6 +86,11 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 				succeed := make([]string, 0, len(m))
 				failed := make([]taskErrorDescription, 0)
 				for _, task := range m {
+					ctx := task.Trace(ctx)
+					ctx, taskSpan := o.tracer.Start(ctx, "outbox publish", trace.WithAttributes(
+						attribute.String("kind", task.Type.String()),
+						attribute.String("id", task.ID),
+					))
 					if err = producer.Produce(ctx, &kafka.Message{
 						Topic:       "avatar",
 						Key:         []byte(task.RecordID),
@@ -80,7 +99,16 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						EventID:     task.ID,
 						TaskType:    task.Type,
 					}); err != nil {
-						logger.Error("failed to produce", zap.Error(err))
+						taskSpan.RecordError(err)
+						taskSpan.End()
+						logger.Error(
+							"failed to produce",
+							zap.Error(err),
+							zap.String(
+								"task_id",
+								task.ID,
+							),
+						)
 						failed = append(failed, taskErrorDescription{
 							Error: err,
 							ID:    task.ID,
@@ -88,6 +116,7 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 						continue
 					}
 					succeed = append(succeed, task.ID)
+					taskSpan.End()
 				}
 
 				if len(succeed) > 0 {
@@ -107,12 +136,14 @@ func (o *outboxImpl) worker(ctx context.Context, wg *sync.WaitGroup, producer ka
 			}); err != nil {
 				logger.Error("outbox iteration failed", zap.Error(err))
 			}
-
+			span.End()
 		}
 	}
 }
 
 type taskErrorDescription struct {
-	Error error  `json:"error"`
-	ID    string `json:"id"`
+	// Error stores the error value.
+	Error error `json:"error"`
+	// ID stores the identifier.
+	ID string `json:"id"`
 }

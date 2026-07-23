@@ -13,45 +13,61 @@ services:
       - "8080:8080"
     environment:
       GOPH_ADDR: ":8080"
-      GOPH_DATABASE: "postgres://dev:dev@psql:5432/goph?sslmode=disable"
-      GOPH_BUCKET: "goph"
-      GOPH_REGION: "eu-east-1"
-      GOPH_ENDPOINT: "http://minio:9000"
-      GOPH_ACCESS_KEY: "admin"
-      GOPH_SECRET_KEY: "admin12345"
-      GOPH_USE_SSL: false
+      GOPH_DATABASE: postgres://dev:dev@psql:5432/goph?sslmode=disable
+      GOPH_BUCKET: goph
+      GOPH_REGION: eu-east-1
+      GOPH_ENDPOINT: http://minio:9000
+      GOPH_ACCESS_KEY: admin
+      GOPH_SECRET_KEY: admin12345
+      GOPH_USE_SSL: "false"
       GOPH_BROKERS: kafka:9092
+      OTEL_SERVICE_NAME: goph-server
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
 
   goph-outbox:
+    image: goph-outbox
     build:
       context: .
       dockerfile: Dockerfile
       args:
         APP_NAME: outbox
     environment:
-      GOPH_DATABASE: "postgres://dev:dev@psql:5432/goph?sslmode=disable"
-      GOPH_BROKERS: "kafka:9092"
+      GOPH_DATABASE: postgres://dev:dev@psql:5432/goph?sslmode=disable
+      GOPH_BROKERS: kafka:9092
+      OTEL_SERVICE_NAME: goph-outbox
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
     depends_on:
       - goph
       - psql
       - kafka-init
 
-
   goph-inbox:
+    image: goph-inbox
     build:
       context: .
       dockerfile: Dockerfile
       args:
         APP_NAME: inbox
     environment:
-      GOPH_DATABASE: "postgres://dev:dev@psql:5432/goph?sslmode=disable"
-      GOPH_BROKERS: "kafka:9092"
-      GOPH_BUCKET: "goph"
-      GOPH_REGION: "eu-east-1"
-      GOPH_ENDPOINT: "http://minio:9000"
-      GOPH_ACCESS_KEY: "admin"
-      GOPH_SECRET_KEY: "admin12345"
-      GOPH_USE_SSL: false
+      GOPH_DATABASE: postgres://dev:dev@psql:5432/goph?sslmode=disable
+      GOPH_BROKERS: kafka:9092
+      GOPH_BUCKET: goph
+      GOPH_REGION: eu-east-1
+      GOPH_ENDPOINT: http://minio:9000
+      GOPH_ACCESS_KEY: admin
+      GOPH_SECRET_KEY: admin12345
+      GOPH_USE_SSL: "false"
+      OTEL_SERVICE_NAME: goph-inbox
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
     depends_on:
       - goph
       - psql
@@ -73,8 +89,8 @@ services:
     image: minio/minio
     container_name: minio
     ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # Web console
+      - "9000:9000"
+      - "9001:9001"
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: admin12345
@@ -122,7 +138,7 @@ services:
       - |
         echo "Waiting for Kafka..."
         cub kafka-ready -b kafka:9092 1 60
-        
+
         kafka-topics \
           --bootstrap-server kafka:9092 \
           --create \
@@ -130,10 +146,77 @@ services:
           --topic avatar \
           --partitions 3 \
           --replication-factor 1
-        
+
         kafka-topics \
           --bootstrap-server kafka:9092 \
           --list
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.143.0
+    container_name: otel-collector
+    ports:
+      - "4317:4317"
+      - "8889:8889"
+      - "13133:13133"
+    command:
+      - "--config=/etc/otel-collector-config.yml"
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    depends_on:
+      - loki
+      - prometheus
+      - jaeger
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.3
+    container_name: loki
+    command:
+      - "-config.file=/etc/loki/local-config.yml"
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.4.5
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+      - prometheus
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alerts:/etc/prometheus/alerts:ro
+    ports:
+      - '9090:9090'
+
+  node_exporter:
+    image: prom/node-exporter:v1.12.0
+    container_name: node_exporter
+    ports:
+      - '9100:9100'
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: jaeger
+    restart: always
+    ports:
+      - '16686:16686'
+
 volumes:
   psql:
   minio_data:
+  loki-data:
+  grafana-data:

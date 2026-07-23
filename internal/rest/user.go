@@ -15,23 +15,25 @@ type userController struct {
 	userService *usecase.UserService
 }
 
+// NewUserController creates a user controller.
 func NewUserController(userServices *usecase.UserService) *userController {
 	return &userController{
 		userService: userServices,
 	}
 }
 
+// Register registers routes on the Echo group.
 func (u *userController) Register(c Section) {
 	c.GET("/users/:userId/avatar", u.Avatar)
 	c.GET("/users/:userId/avatars", u.Avatars)
 	c.DELETE("/users/:userId/avatar", u.Delete)
 }
 
+// Avatar handles avatar upload or retrieval requests.
 func (u *userController) Avatar(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -66,7 +68,7 @@ func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
 	logger := logging.Logger(c.Request().Context())
 	if e == nil {
 		logger.Error("avatarBlob called with nil image")
-		return Error(c, entity.Error(entity.InternalErrorCode, "avatar image is empty"))
+		return Error(c, entity.WrapError(entity.InternalErrorCode, "avatar image is empty", nil))
 	}
 
 	c.Response().Header().Set("Cache-Control", "max-age=86400")
@@ -77,11 +79,11 @@ func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
 	return c.Blob(http.StatusOK, e.MimeType, buf)
 }
 
+// Avatars handles user avatar list requests.
 func (u *userController) Avatars(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 
@@ -100,11 +102,11 @@ func (u *userController) Avatars(c echo.Context) error {
 	return c.JSON(http.StatusOK, meta)
 }
 
+// Delete removes or marks a record as deleted.
 func (u *userController) Delete(c echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userID, err := entity.ParseEmail(c.Param("userId"))
 	if err != nil {
-		logger.Error("error parsing user id", zap.Error(err))
 		return Error(c, err)
 	}
 

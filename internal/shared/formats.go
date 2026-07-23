@@ -1,3 +1,4 @@
+// Package shared contains common helpers used across profile packages.
 package shared
 
 import (
@@ -5,12 +6,14 @@ import (
 	"strings"
 )
 
+// Formats maps supported image formats to MIME types.
 var Formats = []string{
 	"png",
 	"jpeg",
 	"webp",
 }
 
+// ContentType returns the MIME type for a supported format.
 func ContentType(format string) (string, error) {
 	format = strings.ToLower(strings.TrimPrefix(format, "."))
 

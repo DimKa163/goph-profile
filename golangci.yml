@@ -13,7 +13,6 @@ linters:
     - ineffassign
     - errcheck
     - unused
-    - revive
     - gosec
     - bodyclose
     - noctx

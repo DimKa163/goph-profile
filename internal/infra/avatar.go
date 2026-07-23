@@ -1,3 +1,4 @@
+// Package infra contains infrastructure adapters for persistence, storage, and messaging.
 package infra
 
 import (
@@ -11,7 +12,7 @@ import (
 )
 
 const (
-	FindStmt = `SELECT 
+	findStmt = `SELECT 
     				id, 
     				avatars.created_at, 
     				updated_at, 
@@ -32,7 +33,7 @@ const (
 				FROM avatars
 				LEFT JOIN public.images ON avatars.id = images.avatar_id
 				WHERE id = $1 AND deleted_at IS NULL;`
-	FindByUserIDStmt = `SELECT
+	findByUserIDStmt = `SELECT
     				id, 
     				avatars.created_at, 
     				updated_at, 
@@ -53,7 +54,7 @@ const (
 				FROM avatars
 				LEFT JOIN public.images ON avatars.id = images.avatar_id
 				WHERE user_id = $1 AND inactive = false AND deleted_at IS NULL;`
-	ListByUserIDStmt = `SELECT
+	listByUserIDStmt = `SELECT
     				id, 
     				avatars.created_at, 
     				updated_at, 
@@ -75,7 +76,7 @@ const (
 				LEFT JOIN public.images ON avatars.id = images.avatar_id
 				WHERE user_id = $1 AND deleted_at IS NULL
 				ORDER BY avatars.id ASC;`
-	FindImageStmt = `SELECT
+	findImageStmt = `SELECT
 					format, 
 					size, 
 					file_size,
@@ -86,21 +87,21 @@ const (
 					FROM public.images
 					WHERE avatar_id = $1
 					ORDER BY created_at ASC;`
-	InsertAvatarMetadataStmt = `INSERT INTO public.avatars(id, name, user_id, width, height, file_size, mime_type, inactive) 
+	insertAvatarMetadataStmt = `INSERT INTO public.avatars(id, name, user_id, width, height, file_size, mime_type, inactive) 
 								VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at, updated_at, name, user_id, width, height, file_size, mime_type, inactive;`
-	InsertImageMetadataStmt = `INSERT INTO public.images(avatar_id, format, size, file_size, mime_type, s3_key, e_tag) VALUES ($1, $2, $3, $4, $5, $6, $7) 
+	insertImageMetadataStmt = `INSERT INTO public.images(avatar_id, format, size, file_size, mime_type, s3_key, e_tag) VALUES ($1, $2, $3, $4, $5, $6, $7) 
 								ON CONFLICT(avatar_id, format, size) DO NOTHING
 								RETURNING format, size, file_size, mime_type, s3_key, e_tag, created_at;`
-	DeleteStmt                      = `UPDATE public.avatars SET inactive=true, deleted_at=now(), updated_at=now() WHERE id=$1 AND deleted_at IS NULL;`
-	DeleteImagesStmt                = `DELETE FROM public.images WHERE avatar_id = $1;`
-	DeactivateUserAvatarsExceptStmt = `UPDATE public.avatars
+	deleteStmt                      = `UPDATE public.avatars SET inactive=true, deleted_at=now(), updated_at=now() WHERE id=$1 AND deleted_at IS NULL;`
+	deleteImagesStmt                = `DELETE FROM public.images WHERE avatar_id = $1;`
+	deactivateUserAvatarsExceptStmt = `UPDATE public.avatars
 						SET inactive = TRUE,
 						updated_at = now()
 						WHERE user_id = $1
   							AND id <> $2
   							AND inactive = FALSE
   							AND deleted_at IS NULL;`
-	ActivateUserAvatarStmt = `UPDATE public.avatars
+	activateUserAvatarStmt = `UPDATE public.avatars
 							SET inactive = FALSE,
     						updated_at = now()
 								WHERE id = $2
@@ -112,13 +113,15 @@ type avatarRepository struct {
 	pool *retryablepgxpool.Pool
 }
 
+// NewAvatarRepository creates an avatar repository.
 func NewAvatarRepository(pool *retryablepgxpool.Pool) *avatarRepository {
 	return &avatarRepository{pool: pool}
 }
 
+// Find returns avatar metadata by ID.
 func (r *avatarRepository) Find(ctx context.Context, id entity.AvatarID) (*entity.Avatar, error) {
 	var avatar entity.Avatar
-	rows, err := getCon(ctx, r.pool).Query(ctx, FindStmt, id)
+	rows, err := getCon(ctx, r.pool).Query(ctx, findStmt, id)
 	if err != nil {
 		return nil, err
 	}
@@ -170,9 +173,10 @@ func (r *avatarRepository) Find(ctx context.Context, id entity.AvatarID) (*entit
 	return &avatar, nil
 }
 
+// FindByUserID returns the active avatar for a user.
 func (r *avatarRepository) FindByUserID(ctx context.Context, id entity.Email) (*entity.Avatar, error) {
 	var avatar entity.Avatar
-	rows, err := getCon(ctx, r.pool).Query(ctx, FindByUserIDStmt, id)
+	rows, err := getCon(ctx, r.pool).Query(ctx, findByUserIDStmt, id)
 	if err != nil {
 		return nil, err
 	}
@@ -224,8 +228,9 @@ func (r *avatarRepository) FindByUserID(ctx context.Context, id entity.Email) (*
 	return &avatar, nil
 }
 
+// ListByUserID returns avatars for a user.
 func (r *avatarRepository) ListByUserID(ctx context.Context, userID entity.Email) ([]*entity.Avatar, error) {
-	rows, err := getCon(ctx, r.pool).Query(ctx, ListByUserIDStmt, userID)
+	rows, err := getCon(ctx, r.pool).Query(ctx, listByUserIDStmt, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -282,11 +287,12 @@ func (r *avatarRepository) ListByUserID(ctx context.Context, userID entity.Email
 	return ordered, nil
 }
 
+// FindImage returns image metadata by storage key.
 func (r *avatarRepository) FindImage(ctx context.Context, avatarID entity.AvatarID) ([]*entity.Image, error) {
 	c := getCon(ctx, r.pool)
 	rows, err := c.Query(
 		ctx,
-		FindImageStmt,
+		findImageStmt,
 		avatarID,
 	)
 	if err != nil {
@@ -323,6 +329,7 @@ func (r *avatarRepository) FindImage(ctx context.Context, avatarID entity.Avatar
 	return images, nil
 }
 
+// Insert stores a new record.
 func (r *avatarRepository) Insert(
 	ctx context.Context,
 	id entity.AvatarID,
@@ -335,7 +342,7 @@ func (r *avatarRepository) Insert(
 	c := getCon(ctx, r.pool)
 	if err := c.QueryRow(
 		ctx,
-		InsertAvatarMetadataStmt,
+		insertAvatarMetadataStmt,
 		id,
 		name,
 		userID,
@@ -362,7 +369,7 @@ func (r *avatarRepository) Insert(
 	for _, row := range rows {
 		if err := c.QueryRow(
 			ctx,
-			InsertImageMetadataStmt,
+			insertImageMetadataStmt,
 			avatar.ID,
 			row.Format,
 			row.Size,
@@ -387,13 +394,14 @@ func (r *avatarRepository) Insert(
 	return &avatar, nil
 }
 
+// InsertImage stores generated image metadata.
 func (r *avatarRepository) InsertImage(ctx context.Context, e *entity.Avatar) error {
 	var err error
 	c := getCon(ctx, r.pool)
 	for _, row := range e.Images {
 		if _, err = c.Exec(
 			ctx,
-			InsertImageMetadataStmt,
+			insertImageMetadataStmt,
 			e.ID,
 			row.Format,
 			row.Size.String(),
@@ -408,20 +416,22 @@ func (r *avatarRepository) InsertImage(ctx context.Context, e *entity.Avatar) er
 	return err
 }
 
+// ActivateOnlyThis activates one avatar and deactivates the others for the user.
 func (r *avatarRepository) ActivateOnlyThis(ctx context.Context, userID entity.Email, id entity.AvatarID) error {
 	c := getCon(ctx, r.pool)
-	if _, err := c.Exec(ctx, DeactivateUserAvatarsExceptStmt, userID, id); err != nil {
+	if _, err := c.Exec(ctx, deactivateUserAvatarsExceptStmt, userID, id); err != nil {
 		return err
 	}
-	if _, err := c.Exec(ctx, ActivateUserAvatarStmt, userID, id); err != nil {
+	if _, err := c.Exec(ctx, activateUserAvatarStmt, userID, id); err != nil {
 		return err
 	}
 	return nil
 }
 
+// Delete removes or marks a record as deleted.
 func (r *avatarRepository) Delete(ctx context.Context, id entity.AvatarID) error {
 	c := getCon(ctx, r.pool)
-	tg, err := c.Exec(ctx, DeleteStmt, id)
+	tg, err := c.Exec(ctx, deleteStmt, id)
 	if err != nil {
 		return err
 	}
@@ -431,9 +441,10 @@ func (r *avatarRepository) Delete(ctx context.Context, id entity.AvatarID) error
 	return nil
 }
 
+// DeleteImages removes image metadata for an avatar.
 func (r *avatarRepository) DeleteImages(ctx context.Context, id entity.AvatarID) error {
 	c := getCon(ctx, r.pool)
-	tg, err := c.Exec(ctx, DeleteImagesStmt, id)
+	tg, err := c.Exec(ctx, deleteImagesStmt, id)
 	if err != nil {
 		return err
 	}

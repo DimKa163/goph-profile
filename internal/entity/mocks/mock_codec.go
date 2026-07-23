@@ -52,18 +52,18 @@ func (mr *MockImageCodecMockRecorder) Decode(r interface{}) *gomock.Call {
 }
 
 // DecodeConfig mocks base method.
-func (m *MockImageCodec) DecodeConfig(r io.ReadSeeker) (image.Config, error) {
+func (m *MockImageCodec) DecodeConfig(data []byte) (image.Config, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DecodeConfig", r)
+	ret := m.ctrl.Call(m, "DecodeConfig", data)
 	ret0, _ := ret[0].(image.Config)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DecodeConfig indicates an expected call of DecodeConfig.
-func (mr *MockImageCodecMockRecorder) DecodeConfig(r interface{}) *gomock.Call {
+func (mr *MockImageCodecMockRecorder) DecodeConfig(data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeConfig", reflect.TypeOf((*MockImageCodec)(nil).DecodeConfig), r)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeConfig", reflect.TypeOf((*MockImageCodec)(nil).DecodeConfig), data)
 }
 
 // Encode mocks base method.

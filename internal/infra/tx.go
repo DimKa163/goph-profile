@@ -13,9 +13,13 @@ type txContextKey struct{}
 var txKey = txContextKey{}
 
 type pool interface {
+	// Exec executes a query with retry behavior.
 	Exec(ctx context.Context, query string, args ...interface{}) (pgconn.CommandTag, error)
+	// Query executes a query with retry behavior.
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	// QueryRow executes a single-row query with retry behavior.
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	// Begin starts a transaction.
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
@@ -23,12 +27,14 @@ type transactor struct {
 	pool *retryablepgxpool.Pool
 }
 
+// NewTX creates a transaction manager.
 func NewTX(pool *retryablepgxpool.Pool) *transactor {
 	return &transactor{
 		pool: pool,
 	}
 }
 
+// WithTx executes fn inside a transaction.
 func (x *transactor) WithTx(ctx context.Context, fn func(context.Context) error) error {
 	tx, ok := ctx.Value(txKey).(pool)
 	if !ok {

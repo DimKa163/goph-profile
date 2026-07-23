@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Migrate applies database migrations from the provided path.
 func Migrate(pgx *pgxpool.Pool, migrationsDir string) error {
 	var err error
 	db, err := sql.Open("postgres", pgx.Config().ConnString())
