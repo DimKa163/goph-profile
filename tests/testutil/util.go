@@ -184,11 +184,14 @@ func NewServer(t *testing.T) *httptest.Server {
 
 func UploadAvatar(t *testing.T, server *httptest.Server, userID string, path string) (*http.Response, error) {
 	t.Helper()
-	f, err := os.ReadFile(filepath.Join("testdata", path))
+
+	filePath := testdataFilePath(t, path)
+	f, err := os.ReadFile(filePath) // #nosec G304 -- path is constrained to tests/testdata by testdataFilePath.
 	require.NoError(t, err)
+
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	filePart, err := writer.CreateFormFile("image", filepath.Join("testdata", path))
+	filePart, err := writer.CreateFormFile("image", filepath.Base(filePath))
 	require.NoError(t, err)
 	_, err = io.Copy(filePart, bytes.NewReader(f))
 	require.NoError(t, err)
@@ -206,4 +209,26 @@ func UploadAvatar(t *testing.T, server *httptest.Server, userID string, path str
 		Timeout: 30 * time.Second,
 	}
 	return client.Do(req)
+}
+
+func testdataFilePath(t *testing.T, name string) string {
+	t.Helper()
+
+	cleanName := filepath.Clean(name)
+	require.False(t, filepath.IsAbs(cleanName), "testdata file path must be relative")
+	require.Equal(t, filepath.Base(cleanName), cleanName, "testdata file path must be a file name")
+
+	fullPath := filepath.Join("testdata", cleanName)
+	testdataDir, err := filepath.Abs("testdata")
+	require.NoError(t, err)
+
+	absPath, err := filepath.Abs(fullPath)
+	require.NoError(t, err)
+
+	relPath, err := filepath.Rel(testdataDir, absPath)
+	require.NoError(t, err)
+	require.NotEqual(t, "..", relPath)
+	require.False(t, strings.HasPrefix(relPath, ".."+string(os.PathSeparator)))
+
+	return fullPath
 }
