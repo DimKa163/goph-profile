@@ -45,7 +45,7 @@ func Error(c echo.Context, err error) error {
 				Code:    pe.Code.String(),
 			})
 		case entity.InvalidSizeErrorCode:
-			return c.JSON(http.StatusBadRequest, ServiceError{
+			return c.JSON(http.StatusRequestEntityTooLarge, ServiceError{
 				Message: pe.Message,
 				Code:    pe.Code.String(),
 			})

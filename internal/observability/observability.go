@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -75,11 +74,7 @@ func Init(ctx context.Context, name string, opt ...ObsConfiger) (context.Context
 	for _, o := range opt {
 		o(&config)
 	}
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if endpoint == "" {
-		return nil, nil, fmt.Errorf("OTEL_EXPORTER_OTLP_ENDPOINT not set")
-	}
-	config.ExporterEndpoint = endpoint
+	config.ExporterEndpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 
 	res, err := resource.New(
 		ctx,
@@ -115,47 +110,54 @@ func Init(ctx context.Context, name string, opt ...ObsConfiger) (context.Context
 }
 
 func createCoreLogger(ctx context.Context, o observeConfiguration) (*zap.Logger, func(), error) {
-	exporter, err := otlploggrpc.New(
-		ctx,
-		otlploggrpc.WithEndpoint(o.ExporterEndpoint),
-		otlploggrpc.WithInsecure(),
-		otlploggrpc.WithCompressor("gzip"),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	processor := sdklog.NewBatchProcessor(
-		exporter,
-		sdklog.WithExportInterval(2*time.Second),
-	)
-
+	var provider *sdklog.LoggerProvider
 	encoderCfg := o.EncoderConfig
-
+	cores := make([]zapcore.Core, 2)
 	stdoutCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderCfg),
 		zapcore.AddSync(os.Stdout),
 		zapcore.InfoLevel,
 	)
+	cores = append(cores, stdoutCore)
+	if o.ExporterEndpoint != "" {
+		exporter, err := otlploggrpc.New(
+			ctx,
+			otlploggrpc.WithEndpoint(o.ExporterEndpoint),
+			otlploggrpc.WithInsecure(),
+			otlploggrpc.WithCompressor("gzip"),
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		processor := sdklog.NewBatchProcessor(
+			exporter,
+			sdklog.WithExportInterval(2*time.Second),
+		)
+		provider = sdklog.NewLoggerProvider(
+			sdklog.WithResource(o.Resource),
+			sdklog.WithProcessor(processor),
+		)
+		otelCore := otelzap.NewCore(o.ApplicationName, otelzap.WithLoggerProvider(provider))
+		cores = append(cores, otelCore)
+	}
 
-	provider := sdklog.NewLoggerProvider(
-		sdklog.WithResource(o.Resource),
-		sdklog.WithProcessor(processor),
-	)
-
-	otelCore := otelzap.NewCore(o.ApplicationName, otelzap.WithLoggerProvider(provider))
-
-	core := zapcore.NewTee(stdoutCore, otelCore)
+	core := zapcore.NewTee(cores...)
 
 	return zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel)), func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := provider.Shutdown(ctx); err != nil {
-			otel.Handle(err)
+		if provider != nil {
+			if err := provider.Shutdown(ctx); err != nil {
+				otel.Handle(err)
+			}
 		}
 	}, nil
 }
 
 func createMetricProvider(ctx context.Context, o observeConfiguration) (func(), error) {
+	if o.ExporterEndpoint == "" {
+		return func() {}, nil
+	}
 	metricExporter, err := otlpmetricgrpc.New(
 		ctx,
 		otlpmetricgrpc.WithEndpoint(o.ExporterEndpoint),
@@ -186,6 +188,9 @@ func createMetricProvider(ctx context.Context, o observeConfiguration) (func(), 
 }
 
 func createTraceProvider(ctx context.Context, o observeConfiguration) (func(), error) {
+	if o.ExporterEndpoint == "" {
+		return func() {}, nil
+	}
 	exporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithEndpoint(o.ExporterEndpoint),

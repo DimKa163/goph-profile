@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/DimKa163/goph-profile/internal/config"
@@ -18,6 +20,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/shared/img"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -27,145 +30,48 @@ import (
 )
 
 // RunServer starts the HTTP server application.
-func RunServer(conf config.GophConfig, name, version, buildDate, commit string) error {
-	return run(name, version, func(ctx context.Context) error {
-		log := logging.Logger(ctx)
+func RunServer(ctx context.Context, conf config.GophConfig, name, version, buildDate, commit string) error {
+	return run(ctx, name, version, func(ctx context.Context) error {
+		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {
-			log.Fatal("failed to create postgres pool", zap.Error(err))
+			logger.Fatal("failed to create postgres pool", zap.Error(err))
 		}
 		if err = infra.Migrate(pgpool, "./migrations"); err != nil {
-			log.Fatal("failed to migrate", zap.Error(err))
+			logger.Fatal("failed to migrate", zap.Error(err))
 		}
 		defer pgpool.Close()
-		retryablePool := retryablepgxpool.New(pgpool)
-		if err = retryablePool.Ping(ctx); err != nil {
-			log.Fatal("failed to ping postgres", zap.Error(err))
-		}
 
 		s3Client, err := conf.CreateS3(ctx)
 		if err != nil {
-			log.Fatal("failed to create S3 client", zap.Error(err))
-		}
-
-		err = observability.UseStorageUsageObserver(name, retryablePool)
-		if err != nil {
-			log.Fatal("failed to create usage observer", zap.Error(err))
-		}
-
-		metricService, err := observability.NewMetricService(name)
-		if err != nil {
-			log.Fatal("failed to create metric service", zap.Error(err))
+			logger.Fatal("failed to create S3 client", zap.Error(err))
 		}
 
 		s3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
 
-		uc := rest.NewUserController(newUserService(s3, retryablePool))
-		ac := rest.NewAvatarController(metricService, newAvatarService(s3, retryablePool))
-		web := rest.NewWebController(newUserService(s3, retryablePool))
-		e := echo.New()
-		e.Renderer = &TemplateRenderer{
-			Templates: template.Must(template.ParseGlob("web/static/*.html")),
+		h, err := NewServer(ctx, name, s3, pgpool)
+		if err != nil {
+			logger.Fatal("failed to create server", zap.Error(err))
 		}
-		e.Use(middleware.Recover())
-		e.Use(middleware.RequestID())
-		e.Use(otelecho.Middleware(
-			name,
-			otelecho.WithTracerProvider(otel.GetTracerProvider()),
-			otelecho.WithMeterProvider(otel.GetMeterProvider()),
-			otelecho.WithSkipper(func(c echo.Context) bool {
-				return c.Path() == "/health"
-			}),
-		))
-		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-			LogURI:       true,
-			LogStatus:    true,
-			LogMethod:    true,
-			LogLatency:   true,
-			LogRemoteIP:  true,
-			LogHost:      true,
-			LogUserAgent: true,
-			LogError:     true,
-			BeforeNextFunc: func(c echo.Context) {
-				logger := logging.Logger(ctx)
-				req := c.Request()
-				traceID := trace.SpanFromContext(req.Context()).SpanContext().TraceID()
-				fields := []zap.Field{
-					zap.String("method", c.Request().Method),
-					zap.String("uri", c.Request().RequestURI),
-					zap.String("remote_ip", c.RealIP()),
-					zap.String("host", c.Request().Host),
-					zap.String("user_agent", c.Request().UserAgent()),
-					zap.String("trace_id", traceID.String()),
-				}
-				logger = logger.With(fields...)
-				c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
-			},
-			LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-				fields := []zap.Field{
-					zap.Int("status", v.Status),
-					zap.Duration("latency", v.Latency),
-				}
-				logger := logging.Logger(c.Request().Context())
-				if v.Error != nil {
-					fields = append(fields, zap.Error(v.Error))
-				}
-
-				if v.Status >= 500 {
-					logger.Error("request failed", fields...)
-				} else if v.Status >= 400 {
-					logger.Warn("request client error", fields...)
-				} else {
-					logger.Info("request processed", fields...)
-				}
-				return nil
-			},
-		}))
-		e.GET("/health", func(c echo.Context) error {
-			var state struct {
-				Server bool `json:"server"`
-				Db     bool `json:"db"`
-				S3     bool `json:"s3"`
-			}
-			state.Server = true
-			state.Db = true
-			state.S3 = true
-			if err := retryablePool.Ping(c.Request().Context()); err != nil {
-				log.Error("failed to ping postgres", zap.Error(err))
-				state.Db = false
-			}
-			if err := s3.Check(c.Request().Context()); err != nil {
-				log.Error("failed to check S3 connection", zap.Error(err))
-				state.S3 = false
-			}
-			return c.JSON(http.StatusOK, state)
-		})
-		e.File("/", "web/static/index.html")
-		webApi := e.Group("/api")
-		v1 := webApi.Group("/v1")
-
-		uc.Register(v1)
-		ac.Register(v1)
-		web.Register(e)
-		server := conf.Server(e)
+		server := conf.Server(h)
 		go func() {
 			<-ctx.Done()
-			log.Info("shutting down server...")
+			logger.Info("shutting down server...")
 			timeoutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 			defer cancel()
 			if err = server.Shutdown(timeoutCtx); err != nil {
-				log.Warn("failed to shutdown server", zap.Error(err))
+				logger.Warn("failed to shutdown server", zap.Error(err))
 			}
-			log.Info("server shutdown")
+			logger.Info("server shutdown")
 		}()
 		listenConfig := net.ListenConfig{}
 
 		listener, err := listenConfig.Listen(ctx, "tcp", server.Addr)
 		if err != nil {
-			log.Fatal("failed to listen server", zap.String("addr", server.Addr), zap.Error(err))
+			logger.Fatal("failed to listen server", zap.String("addr", server.Addr), zap.Error(err))
 			return err
 		}
-		log.Info("server started",
+		logger.Info("server started",
 			zap.String("addr", listener.Addr().String()),
 			zap.String("name", name),
 			zap.String("version", version),
@@ -177,7 +83,7 @@ func RunServer(conf config.GophConfig, name, version, buildDate, commit string) 
 			zap.Bool("s3_use_ssl", conf.UseSSL),
 		)
 		if err = server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal("server failed", zap.Error(err))
+			logger.Fatal("server failed", zap.Error(err))
 			return err
 		}
 		return nil
@@ -194,6 +100,123 @@ func newAvatarService(s3client entity.S3, pool *retryablepgxpool.Pool) *usecase.
 func newUserService(s3client entity.S3, pool *retryablepgxpool.Pool) *usecase.UserService {
 	return usecase.NewUserService(infra.NewTX(pool), infra.NewAvatarRepository(pool),
 		infra.NewTaskRepository(pool), s3client)
+}
+
+func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.Pool) (http.Handler, error) {
+	logger := logging.Logger(ctx)
+	retryablePool := retryablepgxpool.New(pgpool)
+	if err := retryablePool.Ping(ctx); err != nil {
+		return nil, err
+	}
+	err := observability.UseStorageUsageObserver(name, retryablePool)
+	if err != nil {
+		return nil, err
+	}
+	metricService, err := observability.NewMetricService(name)
+	if err != nil {
+		return nil, err
+	}
+	uc := rest.NewUserController(newUserService(s3, retryablePool))
+	ac := rest.NewAvatarController(metricService, newAvatarService(s3, retryablePool))
+	staticDir := webStaticDir()
+	web := rest.NewWebController(newUserService(s3, retryablePool), staticDir)
+	e := echo.New()
+	templates, err := template.ParseGlob(filepath.Join(staticDir, "*.html"))
+	if err != nil {
+		return nil, err
+	}
+	e.Renderer = &TemplateRenderer{
+		Templates: templates,
+	}
+	e.Use(middleware.Recover())
+	e.Use(middleware.RequestID())
+	e.Use(otelecho.Middleware(
+		name,
+		otelecho.WithTracerProvider(otel.GetTracerProvider()),
+		otelecho.WithMeterProvider(otel.GetMeterProvider()),
+		otelecho.WithSkipper(func(c echo.Context) bool {
+			return c.Path() == "/health"
+		}),
+	))
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogURI:       true,
+		LogStatus:    true,
+		LogMethod:    true,
+		LogLatency:   true,
+		LogRemoteIP:  true,
+		LogHost:      true,
+		LogUserAgent: true,
+		LogError:     true,
+		BeforeNextFunc: func(c echo.Context) {
+			logger := logging.Logger(ctx)
+			req := c.Request()
+			traceID := trace.SpanFromContext(req.Context()).SpanContext().TraceID()
+			fields := []zap.Field{
+				zap.String("method", c.Request().Method),
+				zap.String("uri", c.Request().RequestURI),
+				zap.String("remote_ip", c.RealIP()),
+				zap.String("host", c.Request().Host),
+				zap.String("user_agent", c.Request().UserAgent()),
+				zap.String("trace_id", traceID.String()),
+			}
+			logger = logger.With(fields...)
+			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
+		},
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			fields := []zap.Field{
+				zap.Int("status", v.Status),
+				zap.Duration("latency", v.Latency),
+			}
+			logger := logging.Logger(c.Request().Context())
+			if v.Error != nil {
+				fields = append(fields, zap.Error(v.Error))
+			}
+
+			if v.Status >= 500 {
+				logger.Error("request failed", fields...)
+			} else if v.Status >= 400 {
+				logger.Warn("request client error", fields...)
+			} else {
+				logger.Info("request processed", fields...)
+			}
+			return nil
+		},
+	}))
+	e.GET("/health", func(c echo.Context) error {
+		var state struct {
+			Server bool `json:"server"`
+			Db     bool `json:"db"`
+			S3     bool `json:"s3"`
+		}
+		state.Server = true
+		state.Db = true
+		state.S3 = true
+		if err := retryablePool.Ping(c.Request().Context()); err != nil {
+			logger.Error("failed to ping postgres", zap.Error(err))
+			state.Db = false
+		}
+		if err := s3.Check(c.Request().Context()); err != nil {
+			logger.Error("failed to check S3 connection", zap.Error(err))
+			state.S3 = false
+		}
+		return c.JSON(http.StatusOK, state)
+	})
+	e.File("/", filepath.Join(staticDir, "index.html"))
+	webApi := e.Group("/api")
+	v1 := webApi.Group("/v1")
+
+	uc.Register(v1)
+	ac.Register(v1)
+	web.Register(e)
+	return e, nil
+}
+
+func webStaticDir() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return filepath.Join("web", "static")
+	}
+	return filepath.Join(filepath.Dir(filepath.Dir(file)), "web", "static")
 }
 
 // TemplateRenderer renders HTML templates for Echo.
