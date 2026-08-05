@@ -20,8 +20,8 @@ import (
 )
 
 // RunInbox starts the inbox worker application.
-func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) error {
-	return run(name, version, func(ctx context.Context) error {
+func RunInbox(ctx context.Context, conf config.GophConfig, name, version, buildDate, commit string) error {
+	return run(ctx, name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {

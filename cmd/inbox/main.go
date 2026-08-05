@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/DimKa163/goph-profile/app"
@@ -25,7 +26,7 @@ func main() {
 	if err := env.Parse(&conf); err != nil {
 		log.Fatal(err)
 	}
-	if err := app.RunInbox(conf, Name, Version, BuildDate, Commit); err != nil {
+	if err := app.RunInbox(context.Background(), conf, Name, Version, BuildDate, Commit); err != nil {
 		log.Fatal(err)
 	}
 }

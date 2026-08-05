@@ -12,8 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func run(name, version string, configurator func(ctx context.Context) error) error {
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+func run(ctx context.Context, name, version string, configurator func(ctx context.Context) error) error {
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	ctx, cleanup, err := observability.Init(
 		ctx,

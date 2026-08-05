@@ -13,8 +13,8 @@ import (
 )
 
 // RunOutbox starts the outbox worker application.
-func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) error {
-	return run(name, version, func(ctx context.Context) error {
+func RunOutbox(ctx context.Context, conf config.GophConfig, name, version, buildDate, commit string) error {
+	return run(ctx, name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {

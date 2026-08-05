@@ -3,6 +3,7 @@ package rest
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/logging"
@@ -28,11 +29,16 @@ type Image struct {
 }
 type webController struct {
 	userService *usecase.UserService
+	staticDir   string
 }
 
 // NewWebController creates a web controller.
-func NewWebController(userServices *usecase.UserService) *webController {
-	return &webController{userService: userServices}
+func NewWebController(userServices *usecase.UserService, staticDir ...string) *webController {
+	dir := filepath.Join("web", "static")
+	if len(staticDir) > 0 && staticDir[0] != "" {
+		dir = staticDir[0]
+	}
+	return &webController{userService: userServices, staticDir: dir}
 }
 
 // Register registers routes on the Echo group.
@@ -43,7 +49,7 @@ func (w *webController) Register(e Section) {
 
 // Index renders the index page.
 func (w *webController) Index(c echo.Context) error {
-	return c.File("web/static/index.html")
+	return c.File(filepath.Join(w.staticDir, "index.html"))
 }
 
 // Gallery renders the avatar gallery page.
