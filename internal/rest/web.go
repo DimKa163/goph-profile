@@ -8,7 +8,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.uber.org/zap"
 )
 
@@ -48,12 +48,12 @@ func (w *webController) Register(e Section) {
 }
 
 // Index renders the index page.
-func (w *webController) Index(c echo.Context) error {
+func (w *webController) Index(c *echo.Context) error {
 	return c.File(filepath.Join(w.staticDir, "index.html"))
 }
 
 // Gallery renders the avatar gallery page.
-func (w *webController) Gallery(c echo.Context) error {
+func (w *webController) Gallery(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userIDStr := c.Param("userId")
 	userID, err := entity.ParseEmail(userIDStr)

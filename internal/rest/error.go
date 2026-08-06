@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type (
@@ -19,7 +19,7 @@ type (
 )
 
 // Error returns the error message.
-func Error(c echo.Context, err error) error {
+func Error(c *echo.Context, err error) error {
 	if errors.Is(err, http.ErrMissingFile) {
 		return c.JSON(http.StatusBadRequest, ServiceError{
 			Message: err.Error(),

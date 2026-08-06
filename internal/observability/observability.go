@@ -112,7 +112,7 @@ func Init(ctx context.Context, name string, opt ...ObsConfiger) (context.Context
 func createCoreLogger(ctx context.Context, o observeConfiguration) (*zap.Logger, func(), error) {
 	var provider *sdklog.LoggerProvider
 	encoderCfg := o.EncoderConfig
-	cores := make([]zapcore.Core, 2)
+	cores := make([]zapcore.Core, 0, 2)
 	stdoutCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderCfg),
 		zapcore.AddSync(os.Stdout),

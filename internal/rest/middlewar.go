@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/labstack/gommon/bytes"
 )
 
@@ -18,7 +18,7 @@ func bodyLimit(maxSize string) echo.MiddlewareFunc {
 	}
 	pool := limitedReaderPool(limit)
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			req := c.Request()
 			if req.ContentLength > limit {
 				return Error(c, entity.WrapError(entity.InvalidSizeErrorCode, req.ContentLength, nil))

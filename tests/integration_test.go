@@ -110,7 +110,7 @@ func TestUploadWithoutUserIDShouldBeFailed(t *testing.T) {
 	err = json.Unmarshal(data, &errorResponse)
 	require.NoError(t, err)
 
-	require.Equal(t, errorResponse.Code, entity.InvalidUserIDErrorCode.String())
+	require.Equal(t, entity.InvalidUserIDErrorCode.String(), errorResponse.Code)
 }
 
 func TestUploadWithIncorrectUserIDShouldBeFailed(t *testing.T) {
@@ -130,5 +130,5 @@ func TestUploadWithIncorrectUserIDShouldBeFailed(t *testing.T) {
 	err = json.Unmarshal(data, &errorResponse)
 	require.NoError(t, err)
 
-	require.Equal(t, errorResponse.Code, entity.InvalidUserIDErrorCode.String())
+	require.Equal(t, entity.InvalidUserIDErrorCode.String(), errorResponse.Code)
 }
