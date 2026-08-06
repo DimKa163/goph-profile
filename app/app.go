@@ -38,7 +38,6 @@ func run(ctx context.Context, name, version string, configurator func(ctx contex
 	if err != nil {
 		return err
 	}
-
 	defer cleanup()
 	return configurator(ctx)
 }
