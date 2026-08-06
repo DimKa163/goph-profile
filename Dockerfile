@@ -21,6 +21,7 @@ WORKDIR /app
 COPY --from=builder /src/bin/app .
 COPY --from=builder /src/migrations ./migrations
 COPY --from=builder /src/web ./web
+COPY --from=builder /src/docs ./docs
 
 EXPOSE 8080
 

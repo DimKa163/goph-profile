@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -16,14 +17,15 @@ import (
 	"github.com/DimKa163/goph-profile/internal/infra"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/observability"
+	"github.com/DimKa163/goph-profile/internal/openapi"
 	"github.com/DimKa163/goph-profile/internal/rest"
 	"github.com/DimKa163/goph-profile/internal/shared/img"
 	"github.com/DimKa163/goph-profile/internal/usecase"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	echootel "github.com/labstack/echo-opentelemetry"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -130,14 +132,14 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 	}
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
-	e.Use(otelecho.Middleware(
-		name,
-		otelecho.WithTracerProvider(otel.GetTracerProvider()),
-		otelecho.WithMeterProvider(otel.GetMeterProvider()),
-		otelecho.WithSkipper(func(c echo.Context) bool {
+	e.Use(echootel.NewMiddlewareWithConfig(echootel.Config{
+		ServerName:     name,
+		TracerProvider: otel.GetTracerProvider(),
+		Skipper: func(c *echo.Context) bool {
 			return c.Path() == "/health"
-		}),
-	))
+		},
+		MeterProvider: otel.GetMeterProvider(),
+	}))
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:       true,
 		LogStatus:    true,
@@ -146,8 +148,8 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 		LogRemoteIP:  true,
 		LogHost:      true,
 		LogUserAgent: true,
-		LogError:     true,
-		BeforeNextFunc: func(c echo.Context) {
+		HandleError:  true,
+		BeforeNextFunc: func(c *echo.Context) {
 			logger := logging.Logger(ctx)
 			req := c.Request()
 			traceID := trace.SpanFromContext(req.Context()).SpanContext().TraceID()
@@ -162,7 +164,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 			logger = logger.With(fields...)
 			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
 		},
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			fields := []zap.Field{
 				zap.Int("status", v.Status),
 				zap.Duration("latency", v.Latency),
@@ -182,7 +184,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 			return nil
 		},
 	}))
-	e.GET("/health", func(c echo.Context) error {
+	e.GET("/health", func(c *echo.Context) error {
 		var state struct {
 			Server bool `json:"server"`
 			Db     bool `json:"db"`
@@ -202,21 +204,57 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 		return c.JSON(http.StatusOK, state)
 	})
 	e.File("/", filepath.Join(staticDir, "index.html"))
+	e.File("/openapi.yaml", openAPIFile())
 	webApi := e.Group("/api")
 	v1 := webApi.Group("/v1")
 
 	uc.Register(v1)
 	ac.Register(v1)
 	web.Register(e)
+
+	adapter := rest.NewOpenAPIHandler(ac, uc)
+
+	openapi.RegisterHandlers(v1, adapter)
+	e.GET("/docs", func(c *echo.Context) error {
+		return c.Render(http.StatusOK, "swaggerui.html", map[string]interface{}{})
+	})
 	return e, nil
 }
 
 func webStaticDir() string {
+	staticDir := filepath.Join("web", "static")
+	if _, err := os.Stat(staticDir); err == nil {
+		return staticDir
+	}
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		return filepath.Join("web", "static")
+		return staticDir
 	}
 	return filepath.Join(filepath.Dir(filepath.Dir(file)), "web", "static")
+}
+
+func openAPIFile() string {
+	const openAPIFileName = "openapi.yaml"
+
+	candidates := []string{
+		filepath.Join("docs", openAPIFileName),
+	}
+
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "docs", openAPIFileName))
+	}
+
+	_, file, _, ok := runtime.Caller(0)
+	if ok {
+		candidates = append(candidates, filepath.Join(filepath.Dir(filepath.Dir(file)), "docs", openAPIFileName))
+	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return candidates[0]
 }
 
 // TemplateRenderer renders HTML templates for Echo.
@@ -226,6 +264,6 @@ type TemplateRenderer struct {
 }
 
 // Render executes the named template.
-func (r *TemplateRenderer) Render(w io.Writer, name string, data interface{}, _ echo.Context) error {
-	return r.Templates.ExecuteTemplate(w, name, data)
+func (r *TemplateRenderer) Render(c *echo.Context, w io.Writer, templateName string, data any) error {
+	return r.Templates.ExecuteTemplate(w, templateName, data)
 }
