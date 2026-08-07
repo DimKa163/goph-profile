@@ -3,6 +3,8 @@ run-name: testing goph-profile
 
 on:
   push:
+    branches:
+      - "**"
   pull_request:
     branches: [ main ]
 
