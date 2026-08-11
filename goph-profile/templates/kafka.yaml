@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.kafka.namespace }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.kafka.deployment.zookeeper.serviceName }}
+  namespace: {{ .Values.kafka.namespace }}
+spec:
+  type: {{ .Values.kafka.deployment.zookeeper.service.type }}
+  selector:
+    app: {{ .Values.kafka.deployment.zookeeper.serviceName }}
+  ports:
+    - port: {{ .Values.kafka.deployment.zookeeper.service.port }}
+  {{- if ne .Values.kafka.deployment.zookeeper.service.type "NodePort" }}
+  clusterIP: {{ .Values.kafka.deployment.zookeeper.service.clusterIP }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.kafka.deployment.zookeeper.serviceName }}
+  namespace: {{ .Values.kafka.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.kafka.deployment.zookeeper.serviceName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.kafka.deployment.zookeeper.serviceName }}
+    spec:
+      containers:
+        - name: {{ .Values.kafka.deployment.zookeeper.serviceName }}
+          image: "{{ .Values.kafka.deployment.zookeeper.image.repository }}:{{ .Values.kafka.deployment.zookeeper.image.tag }}"
+
+          ports:
+            - containerPort: {{ .Values.kafka.deployment.zookeeper.service.port }}
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: {{ .Values.kafka.deployment.zookeeper.service.port }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.kafka.deployment.kafka.serviceName }}-secret
+  namespace: {{ .Values.kafka.namespace }}
+type: Opaque
+stringData: {{ toYaml .Values.kafka.deployment.kafka.stringData | nindent 2 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.kafka.deployment.kafka.serviceName }}
+  namespace: {{ .Values.kafka.namespace }}
+spec:
+  type: {{ .Values.kafka.deployment.kafka.service.type }}
+  selector:
+    app: {{ .Values.kafka.deployment.kafka.serviceName }}
+  ports:
+    - port: {{ .Values.kafka.deployment.kafka.service.port }}
+  {{- if ne .Values.kafka.deployment.kafka.service.type "NodePort" }}
+  clusterIP: {{ .Values.kafka.deployment.kafka.service.clusterIP }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.kafka.deployment.kafka.serviceName }}
+  namespace: {{ .Values.kafka.namespace }}
+
+spec:
+  serviceName: {{ .Values.kafka.deployment.kafka.serviceName }}
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: {{ .Values.kafka.deployment.kafka.serviceName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.kafka.deployment.kafka.serviceName }}
+
+    spec:
+      containers:
+        - name: {{ .Values.kafka.deployment.kafka.serviceName }}
+          image: "{{ .Values.kafka.deployment.kafka.image.repository }}:{{ .Values.kafka.deployment.kafka.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.deployment.kafka.image.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.kafka.deployment.kafka.service.port }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.kafka.deployment.kafka.serviceName }}-secret
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ .Values.kafka.deployment.kafka.serviceName }}-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi
