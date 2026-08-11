@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.minio.namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.minio.deployment.minio.serviceName }}-secret
+  namespace: {{ .Values.minio.namespace }}
+type: Opaque
+stringData:
+  {{ toYaml .Values.minio.deployment.minio.stringData | nindent 2 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.minio.deployment.minio.serviceName }}
+  namespace: {{ .Values.minio.namespace }}
+spec:
+  type: {{ .Values.minio.deployment.minio.service.type }}
+  selector:
+    app: {{ .Values.minio.deployment.minio.serviceName }}
+  ports:
+    - name: api
+      port: {{ .Values.minio.deployment.minio.service.ports.api.port }}
+      targetPort: {{ .Values.minio.deployment.minio.service.ports.api.targetPort }}
+    - name: console
+      port: {{ .Values.minio.deployment.minio.service.ports.console.port }}
+      targetPort: {{ .Values.minio.deployment.minio.service.ports.console.targetPort }}
+  {{- if ne .Values.minio.deployment.minio.service.type "NodePort" }}
+  clusterIP: {{ .Values.minio.deployment.minio.service.clusterIP }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.minio.deployment.minio.serviceName }}
+  namespace: {{ .Values.minio.namespace }}
+spec:
+  serviceName: {{ .Values.minio.deployment.minio.serviceName }}
+  replicas: {{ .Values.minio.deployment.minio.replicas }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.minio.deployment.minio.serviceName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.minio.deployment.minio.serviceName }}
+
+    spec:
+      containers:
+        - name: {{ .Values.minio.deployment.minio.serviceName }}
+          image: "{{ .Values.minio.deployment.minio.image.repository }}:{{ .Values.minio.deployment.minio.image.tag }}"
+          imagePullPolicy: {{ .Values.minio.deployment.minio.image.imagePullPolicy }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.minio.deployment.minio.service.ports.api.port }}
+            - name: console
+              containerPort: {{ .Values.minio.deployment.minio.service.ports.console.port }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.minio.deployment.minio.serviceName }}-secret
+
+          volumeMounts:
+            - mountPath: /data
+              name: {{ .Values.minio.deployment.minio.serviceName }}-data
+
+          args:
+            - server
+            - /data
+            - --console-address
+            - :9001
+          resources:
+          {{- toYaml .Values.minio.deployment.minio.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ .Values.minio.deployment.minio.serviceName }}-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+        {{- toYaml .Values.minio.deployment.minio.volumeResources | nindent 10 }}

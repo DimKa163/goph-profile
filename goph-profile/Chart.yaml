@@ -1,0 +1,9 @@
+apiVersion: v2
+name: goph-profile
+description: A helm chart
+
+type: application
+
+version: 0.1.0
+
+appVersion: "1.0.0"
