@@ -210,8 +210,8 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 	webApi := e.Group("/api")
 	v1 := webApi.Group("/v1")
 
-	uc.Register(v1)
-	ac.Register(v1)
+	//uc.Register(v1)
+	//ac.Register(v1)
 	web.Register(e)
 
 	adapter := rest.NewOpenAPIHandler(ac, uc)

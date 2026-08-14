@@ -1,3 +1,5 @@
+accountName: goph-profile
+
 postgres:
   namespace: "postgres"
   deployment:
@@ -196,12 +198,9 @@ app:
           cpu: 100m
       env:
         GOPH_ADDR: ":8080"
-        GOPH_DATABASE: "postgres://postgres:goph@postgres.postgres:5432/goph?sslmode=disable"
         GOPH_BUCKET: "goph"
         GOPH_REGION: "eu-east-1"
         GOPH_ENDPOINT: "http://minio.minio:9000"
-        GOPH_ACCESS_KEY: "admin"
-        GOPH_SECRET_KEY: "admin12345"
         GOPH_USE_SSL: "false"
         GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
         OTEL_SERVICE_NAME: "goph-server"
@@ -210,7 +209,18 @@ app:
         OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
         OTEL_EXPORTER_OTLP_INSECURE: "true"
 
-      annotations: {}
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "goph-profile"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/goph-profile"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/goph-profile" }}
+            export GOPH_ACCESS_KEY='{{ .Data.data.goph_access_key }}'
+            export GOPH_DATABASE='{{ .Data.data.goph_database }}'
+            export GOPH_SECRET_KEY='{{ .Data.data.goph_secret_key }}'
+          {{- end }}
 
       autoscaling:
         enabled: true
@@ -229,7 +239,6 @@ app:
         requests:
           cpu: 100m
       env:
-        GOPH_DATABASE: "postgres://postgres:goph@postgres.postgres:5432/goph?sslmode=disable"
         GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
         OTEL_SERVICE_NAME: "goph-outbox"
         OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
@@ -237,7 +246,15 @@ app:
         OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
         OTEL_EXPORTER_OTLP_INSECURE: "true"
 
-      annotations: {}
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "goph-profile"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/goph-profile"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/goph-profile" }}
+            export GOPH_DATABASE='{{ .Data.data.goph_database }}'
+          {{- end }}
 
       autoscaling:
         enabled: false
@@ -253,12 +270,9 @@ app:
         requests:
           cpu: 100m
       env:
-        GOPH_DATABASE: "postgres://postgres:goph@postgres.postgres:5432/goph?sslmode=disable"
         GOPH_BUCKET: "goph"
         GOPH_REGION: "eu-east-1"
         GOPH_ENDPOINT: "http://minio.minio:9000"
-        GOPH_ACCESS_KEY: "admin"
-        GOPH_SECRET_KEY: "admin12345"
         GOPH_USE_SSL: "false"
         GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
         OTEL_SERVICE_NAME: "goph-inbox"
@@ -267,7 +281,18 @@ app:
         OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
         OTEL_EXPORTER_OTLP_INSECURE: "true"
 
-      annotations: {}
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "goph-profile"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/goph-profile"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/goph-profile" }}
+            export GOPH_ACCESS_KEY='{{ .Data.data.goph_access_key }}'
+            export GOPH_DATABASE='{{ .Data.data.goph_database }}'
+            export GOPH_SECRET_KEY='{{ .Data.data.goph_secret_key }}'
+          {{- end }}
 
       autoscaling:
         enabled: false
