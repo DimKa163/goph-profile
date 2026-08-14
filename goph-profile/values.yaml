@@ -188,7 +188,7 @@ app:
     server:
       image:
         repository: d1dog/goph-server
-        tag: latest
+        tag: unstable
         imagePullPolicy: IfNotPresent
         port: 8080
       resources:
@@ -223,7 +223,7 @@ app:
     outbox:
       image:
         repository: d1dog/goph-outbox
-        tag: latest
+        tag: unstable
         imagePullPolicy: IfNotPresent
       resources:
         requests:
@@ -247,7 +247,7 @@ app:
     inbox:
       image:
         repository: d1dog/goph-inbox
-        tag: latest
+        tag: unstable
         imagePullPolicy: IfNotPresent
       resources:
         requests:
