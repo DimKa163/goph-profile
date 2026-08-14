@@ -9,6 +9,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/entity/events/v1"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/logging"
 )
 
 // UserService defines user service.
@@ -40,6 +41,7 @@ func NewUserService(transactor Transactor, repo entity.AvatarRepository, taskRep
 
 // Get returns the requested avatar image.
 func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, request *Request) (*entity.Image, []byte, error) {
+	logger := logging.Logger(ctx)
 	if request.Size == "" {
 		request.Size = entity.S300x300Size
 	}
@@ -47,7 +49,7 @@ func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, 
 	if request.Format == "" {
 		request.Format = "webp"
 	}
-
+	logger.Debug("find user")
 	e, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, infra.ErrNoRows) {

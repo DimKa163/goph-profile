@@ -11,9 +11,14 @@ spec:
 
   template:
     metadata:
+      annotations:
+            {{- with .Values.app.deployment.outbox.annotations }}
+            {{- toYaml . | nindent 8 }}
+            {{- end }}
       labels:
         app: {{ .Chart.Name }}-outbox
     spec:
+      serviceAccountName: {{ .Values.accountName }}
       initContainers:
         - name: wait-postgres
           image: "{{ .Values.postgres.deployment.postgres.image.repository }}:{{ .Values.postgres.deployment.postgres.image.tag }}"
@@ -41,6 +46,10 @@ spec:
         - name: {{ .Chart.Name }}-outbox
           image: "{{ .Values.app.deployment.outbox.image.repository }}:{{ .Values.app.deployment.outbox.image.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.outbox.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - . /vault/secrets/config && exec ./app
           env:
             {{- range $name, $value := .Values.app.deployment.outbox.env }}
             - name: {{ $name }}
