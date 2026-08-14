@@ -5,6 +5,7 @@ import (
 
 	"github.com/DimKa163/goph-profile/internal/config"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/worker/outbox"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
@@ -28,6 +29,9 @@ func RunOutbox(ctx context.Context, conf config.GophConfig, name, version, build
 		app := outbox.New(otel.Tracer("outbox"), infra.NewTX(retryablePool), infra.NewTaskRepository(retryablePool))
 		producerPool := conf.ProducerPool(ctx, name)
 		defer producerPool.Close()
+		if err = kafka.EnsureTopic(ctx, conf.Brokers, "avatar", 3); err != nil {
+			logger.Fatal("failed to ensure topic", zap.Error(err))
+		}
 		logger.Info("outbox started",
 			zap.String("name", name),
 			zap.String("version", version),

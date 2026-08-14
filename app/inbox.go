@@ -8,6 +8,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/config"
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/shared/img"
@@ -61,7 +62,9 @@ func RunInbox(ctx context.Context, conf config.GophConfig, name, version, buildD
 		kotelService := kotel.NewKotel(
 			kotel.WithTracer(kotelTracer),
 		)
-
+		if err = kafka.EnsureTopic(ctx, conf.Brokers, "avatar", 3); err != nil {
+			logger.Fatal("failed to ensure topic", zap.Error(err))
+		}
 		consumer, err := conf.Consumer(ctx, kotelService, clientID, "avatar")
 		if err != nil {
 			logger.Fatal("failed to create consumer", zap.Error(err))

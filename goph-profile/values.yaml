@@ -33,13 +33,14 @@ kafka:
         imagePullPolicy: IfNotPresent
       service:
         type: ClusterIP
-        clusterIP: None
+        clusterIP: ""
         port: "9092"
       stringData:
         KAFKA_BROKER_ID: "1"
         KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-        KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
-        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+        KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092"
+        KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka.kafka.svc.cluster.local:9092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT"
         KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
         KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
     zookeeper:
@@ -181,3 +182,112 @@ monitoring:
       volumeResources:
         requests:
           storage: 1Gi
+
+app:
+  deployment:
+    server:
+      image:
+        repository: d1dog/goph-server
+        tag: latest
+        imagePullPolicy: IfNotPresent
+        port: 8080
+      resources:
+        requests:
+          cpu: 100m
+      env:
+        GOPH_ADDR: ":8080"
+        GOPH_DATABASE: "postgres://postgres:goph@postgres.postgres:5432/goph?sslmode=disable"
+        GOPH_BUCKET: "goph"
+        GOPH_REGION: "eu-east-1"
+        GOPH_ENDPOINT: "http://minio.minio:9000"
+        GOPH_ACCESS_KEY: "admin"
+        GOPH_SECRET_KEY: "admin12345"
+        GOPH_USE_SSL: "false"
+        GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
+        OTEL_SERVICE_NAME: "goph-server"
+        OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+        OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+      annotations: {}
+
+      autoscaling:
+        enabled: true
+        minReplicas: 1
+        maxReplicas: 10
+        targetCPUUtilizationPercentage: 80
+
+      service:
+        type: ClusterIP
+    outbox:
+      image:
+        repository: d1dog/goph-outbox
+        tag: latest
+        imagePullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 100m
+      env:
+        GOPH_DATABASE: "postgres://postgres:goph@postgres.postgres:5432/goph?sslmode=disable"
+        GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
+        OTEL_SERVICE_NAME: "goph-outbox"
+        OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+        OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+      annotations: {}
+
+      autoscaling:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 10
+        targetCPUUtilizationPercentage: 80
+    inbox:
+      image:
+        repository: d1dog/goph-inbox
+        tag: latest
+        imagePullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 100m
+      env:
+        GOPH_DATABASE: "postgres://postgres:goph@postgres.postgres:5432/goph?sslmode=disable"
+        GOPH_BUCKET: "goph"
+        GOPH_REGION: "eu-east-1"
+        GOPH_ENDPOINT: "http://minio.minio:9000"
+        GOPH_ACCESS_KEY: "admin"
+        GOPH_SECRET_KEY: "admin12345"
+        GOPH_USE_SSL: "false"
+        GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
+        OTEL_SERVICE_NAME: "goph-inbox"
+        OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+        OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+      annotations: {}
+
+      autoscaling:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 10
+        targetCPUUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: "goph-profile-traefik"
+  hosts:
+    - host: goph-avatar
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: "goph-profile-server"
+          port: 80
+    - host: localhost
+      paths:
+          - path: /
+            pathType: Prefix
+            serviceName: "goph-profile-server"
+            port: 80

@@ -1,0 +1,3 @@
+ALTER TABLE public.tasks
+ALTER COLUMN traceparent TYPE VARCHAR(50),
+ALTER COLUMN tracestate TYPE VARCHAR(50);

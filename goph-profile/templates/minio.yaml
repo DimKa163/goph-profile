@@ -64,6 +64,13 @@ spec:
             - secretRef:
                 name: {{ .Values.minio.deployment.minio.serviceName }}-secret
 
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
           volumeMounts:
             - mountPath: /data
               name: {{ .Values.minio.deployment.minio.serviceName }}-data

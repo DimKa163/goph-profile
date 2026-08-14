@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-inbox
+spec:
+
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}-inbox
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}-inbox
+    spec:
+      initContainers:
+        - name: wait-postgres
+          image: "{{ .Values.postgres.deployment.postgres.image.repository }}:{{ .Values.postgres.deployment.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.deployment.postgres.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.postgres.deployment.postgres.serviceName }}.{{ .Values.postgres.namespace }} -p {{ .Values.postgres.deployment.postgres.service.port }} -U {{ .Values.postgres.deployment.postgres.stringData.POSTGRES_USER | quote }}; do
+                echo "waiting for postgres"
+                sleep 2
+              done
+        - name: wait-minio
+          image: minio/mc:latest
+          command:
+            - sh
+            - -c
+            - |
+              until mc alias set local http://{{ .Values.minio.deployment.minio.serviceName }}.{{ .Values.minio.namespace }}:{{ .Values.minio.deployment.minio.service.ports.api.port }} {{ .Values.app.deployment.inbox.env.GOPH_ACCESS_KEY | quote }} {{ .Values.app.deployment.inbox.env.GOPH_SECRET_KEY | quote }} >/dev/null 2>&1; do
+                echo "waiting for minio"
+                sleep 2
+              done
+              until mc mb --ignore-existing local/{{ .Values.app.deployment.inbox.env.GOPH_BUCKET | quote }}; do
+                echo "waiting for minio bucket"
+                sleep 2
+              done
+        - name: wait-kafka
+          image: "{{ .Values.kafka.deployment.kafka.image.repository }}:{{ .Values.kafka.deployment.kafka.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.deployment.kafka.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until kafka-broker-api-versions --bootstrap-server {{ .Values.kafka.deployment.kafka.serviceName }}.{{ .Values.kafka.namespace }}:{{ .Values.kafka.deployment.kafka.service.port }} >/dev/null 2>&1; do
+                echo "waiting for kafka"
+                sleep 2
+              done
+      containers:
+        - name: {{ .Chart.Name }}-inbox
+          image: "{{ .Values.app.deployment.inbox.image.repository }}:{{ .Values.app.deployment.inbox.image.tag }}"
+          imagePullPolicy: {{ .Values.app.deployment.inbox.image.imagePullPolicy }}
+          env:
+            {{- range $name, $value := .Values.app.deployment.inbox.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+          {{- toYaml .Values.app.deployment.inbox.resources | nindent 12 }}

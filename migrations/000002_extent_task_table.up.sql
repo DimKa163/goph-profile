@@ -1,3 +1,3 @@
 ALTER TABLE public.tasks
-ADD COLUMN traceparent VARCHAR(50) NULL,
-ADD COLUMN tracestate VARCHAR(50) NULL;
+ADD COLUMN traceparent VARCHAR(255) NULL,
+ADD COLUMN tracestate VARCHAR(255) NULL;

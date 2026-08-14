@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-outbox
+spec:
+
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}-outbox
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}-outbox
+    spec:
+      initContainers:
+        - name: wait-postgres
+          image: "{{ .Values.postgres.deployment.postgres.image.repository }}:{{ .Values.postgres.deployment.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.deployment.postgres.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.postgres.deployment.postgres.serviceName }}.{{ .Values.postgres.namespace }} -p {{ .Values.postgres.deployment.postgres.service.port }} -U {{ .Values.postgres.deployment.postgres.stringData.POSTGRES_USER | quote }}; do
+                echo "waiting for postgres"
+                sleep 2
+              done
+        - name: wait-kafka
+          image: "{{ .Values.kafka.deployment.kafka.image.repository }}:{{ .Values.kafka.deployment.kafka.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.deployment.kafka.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until kafka-broker-api-versions --bootstrap-server {{ .Values.kafka.deployment.kafka.serviceName }}.{{ .Values.kafka.namespace }}:{{ .Values.kafka.deployment.kafka.service.port }} >/dev/null 2>&1; do
+                echo "waiting for kafka"
+                sleep 2
+              done
+      containers:
+        - name: {{ .Chart.Name }}-outbox
+          image: "{{ .Values.app.deployment.outbox.image.repository }}:{{ .Values.app.deployment.outbox.image.tag }}"
+          imagePullPolicy: {{ .Values.app.deployment.outbox.image.imagePullPolicy }}
+          env:
+            {{- range $name, $value := .Values.app.deployment.outbox.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+          {{- toYaml .Values.app.deployment.outbox.resources | nindent 12 }}
