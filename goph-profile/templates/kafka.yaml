@@ -89,9 +89,6 @@ spec:
       labels:
         app: {{ .Values.kafka.deployment.kafka.serviceName }}
 
-      annotations:
-        checksum/kafka-secret: {{ include (print $.Template.BasePath "/kafka-secret.yaml") . | sha256sum }}
-
     spec:
       containers:
         - name: {{ .Values.kafka.deployment.kafka.serviceName }}
