@@ -40,7 +40,12 @@ spec:
             - containerPort: {{ .Values.kafka.deployment.zookeeper.service.port }}
           env:
             - name: ZOOKEEPER_CLIENT_PORT
-              value: {{ .Values.kafka.deployment.zookeeper.service.port }}
+              value: {{ .Values.kafka.deployment.zookeeper.service.port | quote }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.deployment.zookeeper.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
 ---
 apiVersion: v1
 kind: Secret
@@ -61,7 +66,7 @@ spec:
     app: {{ .Values.kafka.deployment.kafka.serviceName }}
   ports:
     - port: {{ .Values.kafka.deployment.kafka.service.port }}
-  {{- if ne .Values.kafka.deployment.kafka.service.type "NodePort" }}
+  {{- if and (ne .Values.kafka.deployment.kafka.service.type "NodePort") .Values.kafka.deployment.kafka.service.clusterIP }}
   clusterIP: {{ .Values.kafka.deployment.kafka.service.clusterIP }}
   {{- end }}
 ---
@@ -84,6 +89,9 @@ spec:
       labels:
         app: {{ .Values.kafka.deployment.kafka.serviceName }}
 
+      annotations:
+        checksum/kafka-secret: {{ include (print $.Template.BasePath "/kafka-secret.yaml") . | sha256sum }}
+
     spec:
       containers:
         - name: {{ .Values.kafka.deployment.kafka.serviceName }}
@@ -94,6 +102,11 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ .Values.kafka.deployment.kafka.serviceName }}-secret
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.kafka.deployment.kafka.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
   volumeClaimTemplates:
     - metadata:
         name: {{ .Values.kafka.deployment.kafka.serviceName }}-data

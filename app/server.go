@@ -48,7 +48,9 @@ func RunServer(ctx context.Context, conf config.GophConfig, name, version, build
 		if err != nil {
 			logger.Fatal("failed to create S3 client", zap.Error(err))
 		}
-
+		if err = infra.EnsureBucket(ctx, s3Client, conf.Bucket, conf.Region); err != nil {
+			logger.Fatal("failed to ensure bucket", zap.Error(err))
+		}
 		s3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
 
 		h, err := NewServer(ctx, name, s3, pgpool)

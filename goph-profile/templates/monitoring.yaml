@@ -473,6 +473,7 @@ data:
     
     - name: Prometheus
       type: prometheus
+      uid: dfs9enowgtl34a
       access: proxy
       url: http://prometheus:9090
       isDefault: false
