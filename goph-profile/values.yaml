@@ -186,11 +186,11 @@ monitoring:
           storage: 1Gi
 
 app:
+  tag: v0.0.3-unstable
   deployment:
     server:
       image:
         repository: d1dog/goph-server
-        tag: unstable
         imagePullPolicy: IfNotPresent
         port: 8080
       resources:
@@ -233,7 +233,6 @@ app:
     outbox:
       image:
         repository: d1dog/goph-outbox
-        tag: unstable
         imagePullPolicy: IfNotPresent
       resources:
         requests:
@@ -264,7 +263,6 @@ app:
     inbox:
       image:
         repository: d1dog/goph-inbox
-        tag: unstable
         imagePullPolicy: IfNotPresent
       resources:
         requests:

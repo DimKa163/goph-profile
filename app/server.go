@@ -164,6 +164,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 				zap.String("trace_id", traceID.String()),
 			}
 			logger = logger.With(fields...)
+
 			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
 		},
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {

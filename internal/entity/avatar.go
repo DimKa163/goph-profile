@@ -50,7 +50,7 @@ func ParseEmail(email string) (Email, error) {
 	if !emailRegex.MatchString(e) {
 		return "", WrapError(InvalidUserIDErrorCode, e, nil)
 	}
-	return Email(email), nil
+	return Email(e), nil
 }
 
 // String

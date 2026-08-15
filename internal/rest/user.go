@@ -43,14 +43,12 @@ func (u *userController) Avatar(c *echo.Context) error {
 	}
 	logger = logger.With(zap.String("user_id", userID.String()))
 	ctx := logging.SetLogger(c.Request().Context(), logger)
-
 	e, buf, err := u.userService.Get(ctx, c.Request().Header.Get("If-None-Match"), userID, &req)
 	switch {
 	case err == nil:
 	case errors.Is(err, usecase.ErrAvatarNotModified):
 		return c.NoContent(http.StatusNotModified)
 	case errors.Is(err, entity.ErrNotFoundEntity):
-		logger.Debug("user avatar not found")
 		e, buf, err = u.userService.GetDefault(c.Request().Header.Get("If-None-Match"), &req)
 		if err != nil {
 			if errors.Is(err, usecase.ErrAvatarNotModified) {

@@ -25,8 +25,8 @@ func NewOpenAPIHandler(
 }
 
 // UploadAvatar upload avatar
-func (h *OpenAPIHandler) UploadAvatar(c *echo.Context, _ openapi.UploadAvatarParams) error {
-	return h.avatar.Avatar(c)
+func (h *OpenAPIHandler) UploadAvatar(ctx *echo.Context, _ openapi.UploadAvatarParams) error {
+	return h.avatar.Avatar(ctx)
 }
 
 // DeleteAvatar delete avatar

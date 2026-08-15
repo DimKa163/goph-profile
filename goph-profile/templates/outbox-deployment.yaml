@@ -44,7 +44,7 @@ spec:
               done
       containers:
         - name: {{ .Chart.Name }}-outbox
-          image: "{{ .Values.app.deployment.outbox.image.repository }}:{{ .Values.app.deployment.outbox.image.tag }}"
+          image: "{{ .Values.app.deployment.outbox.image.repository }}:{{ .Values.app.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.outbox.image.imagePullPolicy }}
           command:
             - sh

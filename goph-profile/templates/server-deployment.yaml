@@ -60,7 +60,7 @@ spec:
               done
       containers:
         - name: {{ .Chart.Name }}-server
-          image: "{{ .Values.app.deployment.server.image.repository }}:{{ .Values.app.deployment.server.image.tag }}"
+          image: "{{ .Values.app.deployment.server.image.repository }}:{{ .Values.app.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.server.image.imagePullPolicy }}
           ports:
             - containerPort: {{ .Values.app.deployment.server.image.port }}

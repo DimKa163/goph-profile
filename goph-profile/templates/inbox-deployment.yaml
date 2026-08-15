@@ -59,7 +59,7 @@ spec:
               done
       containers:
         - name: {{ .Chart.Name }}-inbox
-          image: "{{ .Values.app.deployment.inbox.image.repository }}:{{ .Values.app.deployment.inbox.image.tag }}"
+          image: "{{ .Values.app.deployment.inbox.image.repository }}:{{ .Values.app.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.inbox.image.imagePullPolicy }}
           command:
             - sh
