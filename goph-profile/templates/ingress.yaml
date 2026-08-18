@@ -4,6 +4,10 @@ kind: Ingress
 metadata:
   name: {{ .Chart.Name }}-ingress
   namespace: {{ .Chart.Name }}
+  {{- if .Values.ingress.rateLimit.enabled }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ .Chart.Name }}-{{ .Values.ingress.rateLimit.middlewareName }}@kubernetescrd"
+  {{- end }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}

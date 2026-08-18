@@ -301,6 +301,12 @@ app:
 ingress:
   enabled: true
   className: "goph-profile-traefik"
+  rateLimit:
+    enabled: true
+    middlewareName: api-rate-limit
+    average: 100
+    burst: 50
+    period: 1s
   hosts:
     - host: goph-avatar
       paths:
