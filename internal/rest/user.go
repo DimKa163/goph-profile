@@ -41,8 +41,9 @@ func (u *userController) Avatar(c *echo.Context) error {
 		Format: c.QueryParam("format"),
 		Size:   entity.Size(c.QueryParam("size")),
 	}
-
-	e, buf, err := u.userService.Get(c.Request().Context(), c.Request().Header.Get("If-None-Match"), userID, &req)
+	logger = logger.With(zap.String("user_id", userID.String()))
+	ctx := logging.SetLogger(c.Request().Context(), logger)
+	e, buf, err := u.userService.Get(ctx, c.Request().Header.Get("If-None-Match"), userID, &req)
 	switch {
 	case err == nil:
 	case errors.Is(err, usecase.ErrAvatarNotModified):

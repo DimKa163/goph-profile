@@ -48,7 +48,9 @@ func RunServer(ctx context.Context, conf config.GophConfig, name, version, build
 		if err != nil {
 			logger.Fatal("failed to create S3 client", zap.Error(err))
 		}
-
+		if err = infra.EnsureBucket(ctx, s3Client, conf.Bucket, conf.Region); err != nil {
+			logger.Fatal("failed to ensure bucket", zap.Error(err))
+		}
 		s3 := infra.NewS3(otel.Tracer("s3"), s3Client, conf.Bucket)
 
 		h, err := NewServer(ctx, name, s3, pgpool)
@@ -162,6 +164,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 				zap.String("trace_id", traceID.String()),
 			}
 			logger = logger.With(fields...)
+
 			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
 		},
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
@@ -208,8 +211,8 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 	webApi := e.Group("/api")
 	v1 := webApi.Group("/v1")
 
-	uc.Register(v1)
-	ac.Register(v1)
+	//uc.Register(v1)
+	//ac.Register(v1)
 	web.Register(e)
 
 	adapter := rest.NewOpenAPIHandler(ac, uc)

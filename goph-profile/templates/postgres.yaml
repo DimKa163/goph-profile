@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.postgres.namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.postgres.deployment.postgres.serviceName }}-secret
+  namespace: {{ .Values.postgres.namespace }}
+type: Opaque
+stringData:
+  {{ toYaml .Values.postgres.deployment.postgres.stringData | nindent 2 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.postgres.deployment.postgres.serviceName }}
+  namespace: {{ .Values.postgres.namespace }}
+spec:
+  type: {{ .Values.postgres.deployment.postgres.service.type }}
+  selector:
+    app: {{ .Values.postgres.deployment.postgres.serviceName }}
+  ports:
+    - port: {{ .Values.postgres.deployment.postgres.service.port }}
+      targetPort: {{ .Values.postgres.deployment.postgres.service.targetPort }}
+  {{- if eq .Values.postgres.deployment.postgres.service.type "NodePort"}}
+  {{- else }}
+  clusterIP: {{ .Values.postgres.deployment.postgres.service.clusterIP }}
+  {{- end}}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.postgres.deployment.postgres.serviceName }}
+  namespace: {{ .Values.postgres.namespace }}
+spec:
+  serviceName: {{ .Values.postgres.deployment.postgres.serviceName }}
+  replicas: {{ .Values.postgres.deployment.postgres.replicas }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.postgres.deployment.postgres.serviceName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{.Values.postgres.deployment.postgres.serviceName}}
+    spec:
+      containers:
+        - name: {{ .Values.postgres.deployment.postgres.serviceName }}
+          image: "{{ .Values.postgres.deployment.postgres.image.repository }}:{{ .Values.postgres.deployment.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.deployment.postgres.image.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.postgres.deployment.postgres.service.port }}
+
+          envFrom:
+            - secretRef:
+                name: {{ .Values.postgres.deployment.postgres.serviceName }}-secret
+
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.deployment.postgres.stringData.POSTGRES_USER | quote }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          volumeMounts:
+            - name: {{ .Values.postgres.deployment.postgres.serviceName }}-data
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ .Values.postgres.deployment.postgres.serviceName }}-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+        {{- toYaml .Values.postgres.deployment.postgres.volumeResources | nindent 10 }}

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-server
+spec:
+
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}-server
+
+  template:
+    metadata:
+      annotations:
+            {{- with .Values.app.deployment.server.annotations }}
+            {{- toYaml . | nindent 8 }}
+            {{- end }}
+
+      labels:
+        app: {{ .Chart.Name }}-server
+    spec:
+      serviceAccountName: {{ .Values.accountName }}
+      initContainers:
+        - name: wait-postgres
+          image: "{{ .Values.postgres.deployment.postgres.image.repository }}:{{ .Values.postgres.deployment.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.deployment.postgres.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.postgres.deployment.postgres.serviceName }}.{{ .Values.postgres.namespace }} -p {{ .Values.postgres.deployment.postgres.service.port }} -U {{ .Values.postgres.deployment.postgres.stringData.POSTGRES_USER | quote }}; do
+                echo "waiting for postgres"
+                sleep 2
+              done
+        - name: wait-minio
+          image: minio/mc:latest
+          command:
+            - sh
+            - -c
+            - |
+              . /vault/secrets/config
+              until mc alias set local http://{{ .Values.minio.deployment.minio.serviceName }}.{{ .Values.minio.namespace }}:{{ .Values.minio.deployment.minio.service.ports.api.port }} "$GOPH_ACCESS_KEY" "$GOPH_SECRET_KEY" >/dev/null 2>&1; do
+                echo "waiting for minio"
+                sleep 2
+              done
+              until mc mb --ignore-existing local/{{ .Values.app.deployment.server.env.GOPH_BUCKET | quote }}; do
+                echo "waiting for minio bucket"
+                sleep 2
+              done
+        - name: wait-kafka
+          image: "{{ .Values.kafka.deployment.kafka.image.repository }}:{{ .Values.kafka.deployment.kafka.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.deployment.kafka.image.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              until kafka-broker-api-versions --bootstrap-server {{ .Values.kafka.deployment.kafka.serviceName }}.{{ .Values.kafka.namespace }}:{{ .Values.kafka.deployment.kafka.service.port }} >/dev/null 2>&1; do
+                echo "waiting for kafka"
+                sleep 2
+              done
+      containers:
+        - name: {{ .Chart.Name }}-server
+          image: "{{ .Values.app.deployment.server.image.repository }}:{{ .Values.app.tag }}"
+          imagePullPolicy: {{ .Values.app.deployment.server.image.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.app.deployment.server.image.port }}
+          command:
+            - sh
+            - -c
+            - . /vault/secrets/config && exec ./app
+          env:
+            {{- range $name, $value := .Values.app.deployment.server.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+          {{- toYaml .Values.app.deployment.server.resources | nindent 12 }}
