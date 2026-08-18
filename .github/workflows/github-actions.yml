@@ -27,7 +27,6 @@ jobs:
       - name: Vet
         run: task go-lint
 
-
   test:
     runs-on: ubuntu-latest
     steps:
