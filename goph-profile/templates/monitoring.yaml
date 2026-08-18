@@ -412,12 +412,11 @@ spec:
       targetPort: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.targetPort }}
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
   namespace: {{ .Values.monitoring.namespace }}
 spec:
-  replicas: {{ .Values.monitoring.deployment.nodeExporter.replicas }}
   selector:
     matchLabels:
       app: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
