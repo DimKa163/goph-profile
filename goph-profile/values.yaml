@@ -186,7 +186,7 @@ monitoring:
           storage: 1Gi
 
 app:
-  tag: v0.0.3-unstable
+  tag: unstable
   deployment:
     server:
       image:
