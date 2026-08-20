@@ -6,57 +6,6 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: prometheus-config
-  namespace: {{ .Values.monitoring.namespace }}
-data:
-  alerts.yml: |
-    groups:
-      - name: avatar-service
-        rules:
-          - alert: HighErrorRate
-            expr: |
-              sum(rate(avatars_uploads_total{status="failure"}[5m]))
-              /
-              sum(rate(avatars_uploads_total[5m]))
-              > 0.1
-            for: 5m
-            labels:
-              severity: warning
-
-          - alert: HighResponseTime
-            expr: |
-              histogram_quantile(
-                0.95,
-                sum by (le) (
-                  rate(avatars_upload_duration_seconds_bucket[5m])
-                )
-              ) > 5
-            for: 2m
-            labels:
-              severity: critical
-  prometheus.yml: |
-    global:
-      scrape_interval: 15s
-
-    rule_files:
-      - /etc/prometheus/alerts/*.yml
-
-    scrape_configs:
-      - job_name: 'prometheus'
-        static_configs:
-          - targets: [ 'prometheus:9090' ]
-
-      - job_name: 'node'
-        static_configs:
-          - targets: [ 'node-exporter:9100' ]
-
-      - job_name: 'otel-collector'
-        static_configs:
-          - targets: [ 'otel-collector:8889' ]
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
   name: otel-collector-config
   namespace: {{ .Values.monitoring.namespace }}
 data:
@@ -178,61 +127,10 @@ data:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.monitoring.deployment.prometheus.serviceName }}
-  namespace: {{ .Values.monitoring.namespace }}
-spec:
-  type: {{ .Values.monitoring.deployment.prometheus.service.type }}
-  selector:
-    app: {{ .Values.monitoring.deployment.prometheus.serviceName }}
-  ports:
-    - port: {{ .Values.monitoring.deployment.prometheus.service.port }}
-      targetPort: {{ .Values.monitoring.deployment.prometheus.service.targetPort }}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ .Values.monitoring.deployment.prometheus.serviceName }}
-  namespace: {{ .Values.monitoring.namespace }}
-
-spec:
-  replicas: {{ .Values.monitoring.deployment.prometheus.replicas }}
-
-  selector:
-    matchLabels:
-      app: {{ .Values.monitoring.deployment.prometheus.serviceName }}
-
-  template:
-    metadata:
-      labels:
-        app: {{ .Values.monitoring.deployment.prometheus.serviceName }}
-
-    spec:
-      containers:
-        - name: {{ .Values.monitoring.deployment.prometheus.serviceName }}
-          image: "{{ .Values.monitoring.deployment.prometheus.image.repository }}:{{ .Values.monitoring.deployment.prometheus.image.tag }}"
-          imagePullPolicy: {{ .Values.monitoring.deployment.prometheus.image.imagePullPolicy }}
-
-          ports:
-            - containerPort: {{ .Values.monitoring.deployment.prometheus.service.port }}
-
-          volumeMounts:
-            - mountPath: /etc/prometheus/prometheus.yml
-              name: prometheus-config
-              subPath: prometheus.yml
-            - mountPath: /etc/prometheus/alerts/alerts.yml
-              name: prometheus-config
-              subPath: alerts.yml
-
-      volumes:
-        - name: prometheus-config
-          configMap:
-            name: prometheus-config
----
-apiVersion: v1
-kind: Service
-metadata:
   name: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
   namespace: {{ .Values.monitoring.namespace }}
+  labels:
+    app: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
 spec:
   type: {{ .Values.monitoring.deployment.otelCollector.service.type }}
   selector:
@@ -257,7 +155,6 @@ kind: Deployment
 metadata:
   name: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
   namespace: {{ .Values.monitoring.namespace }}
-
 spec:
   replicas: {{ .Values.monitoring.deployment.otelCollector.replicas }}
 
@@ -411,134 +308,21 @@ spec:
       port: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.port }}
       targetPort: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.targetPort }}
 ---
-apiVersion: apps/v1
-kind: DaemonSet
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
 metadata:
-  name: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
-  namespace: {{ .Values.monitoring.namespace }}
+  name: otel-collector
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
-      app: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
-  template:
-    metadata:
-      labels:
-        app: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
-
-    spec:
-      containers:
-        - name: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
-          image: "{{ .Values.monitoring.deployment.nodeExporter.image.repository }}:{{ .Values.monitoring.deployment.nodeExporter.image.tag }}"
-          imagePullPolicy: {{ .Values.monitoring.deployment.nodeExporter.image.imagePullPolicy }}
-
-          ports:
-            - containerPort: {{ .Values.monitoring.deployment.nodeExporter.service.port }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
-  namespace: {{ .Values.monitoring.namespace }}
-spec:
-  type: {{ .Values.monitoring.deployment.nodeExporter.service.type }}
-  selector:
-    app: {{ .Values.monitoring.deployment.nodeExporter.serviceName }}
-  ports:
-    - port: {{ .Values.monitoring.deployment.nodeExporter.service.port }}
-      targetPort: {{ .Values.monitoring.deployment.nodeExporter.service.targetPort }}
-  {{- if ne .Values.monitoring.deployment.nodeExporter.service.type "NodePort" }}
-  clusterIP: {{ .Values.monitoring.deployment.nodeExporter.service.clusterIP }}
-  {{- end }}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-config
-  namespace: {{ .Values.monitoring.namespace }}
-data:
-  grafana-datasources.yml: |
-    # nonk8s
-    apiVersion: 1
-
-    datasources:
-    - name: Loki
-      type: loki
-      access: proxy
-      url: http://loki:3100
-      isDefault: true
-      editable: true
-      jsonData:
-      maxLines: 1000
-    
-    - name: Prometheus
-      type: prometheus
-      uid: dfs9enowgtl34a
-      access: proxy
-      url: http://prometheus:9090
-      isDefault: false
-      editable: true
-    
-    - name: Jaeger
-      type: jaeger
-      access: proxy
-      url: http://jaeger:16686
-      editable: true
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {{ .Values.monitoring.deployment.grafana.serviceName }}
-  namespace: {{ .Values.monitoring.namespace }}
-spec:
-  replicas: {{ .Values.monitoring.deployment.grafana.replicas }}
-  serviceName: {{ .Values.monitoring.deployment.grafana.serviceName }}
-  selector:
-    matchLabels:
-      app: {{ .Values.monitoring.deployment.grafana.serviceName }}
-  template:
-    metadata:
-      labels:
-        app: {{ .Values.monitoring.deployment.grafana.serviceName }}
-
-    spec:
-      containers:
-        - name: {{ .Values.monitoring.deployment.grafana.serviceName }}
-          image: "{{ .Values.monitoring.deployment.grafana.image.repository }}:{{ .Values.monitoring.deployment.grafana.image.tag }}"
-          imagePullPolicy: {{ .Values.monitoring.deployment.grafana.image.imagePullPolicy }}
-
-          ports:
-            - containerPort: {{ .Values.monitoring.deployment.grafana.service.port }}
-
-          volumeMounts:
-            - mountPath: /etc/grafana/provisioning/datasources/datasources.yml
-              name: grafana-config
-              subPath: grafana-datasources.yml
-
-            - mountPath: /var/lib/grafana
-              name: {{ .Values.monitoring.deployment.grafana.serviceName }}-data
-
-      volumes:
-        - name: grafana-config
-          configMap:
-            name: grafana-config
-  volumeClaimTemplates:
-    - metadata:
-        name: {{ .Values.monitoring.deployment.grafana.serviceName }}-data
-      spec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-        {{- toYaml .Values.monitoring.deployment.grafana.volumeResources | nindent 10 }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Values.monitoring.deployment.grafana.serviceName }}
-  namespace: {{ .Values.monitoring.namespace }}
-spec:
-  type: {{ .Values.monitoring.deployment.grafana.service.type }}
-  selector:
-    app: {{ .Values.monitoring.deployment.grafana.serviceName }}
-  ports:
-    - port: {{ .Values.monitoring.deployment.grafana.service.port }}
-      targetPort: {{ .Values.monitoring.deployment.grafana.service.targetPort }}
+      app: otel-collector
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  endpoints:
+    - port: prometheus
+      path: /metrics
+      interval: 15s

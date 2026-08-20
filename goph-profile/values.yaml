@@ -170,21 +170,6 @@ monitoring:
         clusterIP: None
         port: "9100"
         targetPort: "9100"
-    grafana:
-      serviceName: grafana
-      image:
-        repository: grafana/grafana
-        tag: 12.4.5
-        imagePullPolicy: IfNotPresent
-      replicas: 1
-      service:
-        type: NodePort
-        port: "3000"
-        targetPort: "3000"
-      volumeResources:
-        requests:
-          storage: 1Gi
-
 app:
   tag: unstable
   deployment:
@@ -353,3 +338,25 @@ ingress:
             pathType: Prefix
             serviceName: "goph-profile-server"
             port: 80
+
+kube-prometheus-stack:
+  enabled: true
+
+  grafana:
+    enabled: true
+
+  prometheus:
+    enabled: true
+    prometheusSpec:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+
+  prometheus-node-exporter:
+    enabled: true
+
+  kube-state-metrics:
+    enabled: true
+
+  alertmanager:
+    enabled: true
