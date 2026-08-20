@@ -312,17 +312,8 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: otel-collector
-  namespace: monitoring
+  namespace: {{ .Values.serviceMonitor.namespace }}
   labels:
-    release: kube-prometheus-stack
+    {{- toYaml .Values.serviceMonitor.labels | nindent 4 }}
 spec:
-  selector:
-    matchLabels:
-      app: otel-collector
-  namespaceSelector:
-    matchNames:
-      - monitoring
-  endpoints:
-    - port: prometheus
-      path: /metrics
-      interval: 15s
+  {{- toYaml .Values.serviceMonitor.spec | nindent 4 }}

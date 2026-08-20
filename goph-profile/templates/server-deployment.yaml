@@ -18,6 +18,7 @@ spec:
 
       labels:
         app: {{ .Chart.Name }}-server
+        app.kubernetes.io/part-of: {{ .Chart.Name }}
     spec:
       serviceAccountName: {{ .Values.accountName }}
       securityContext:

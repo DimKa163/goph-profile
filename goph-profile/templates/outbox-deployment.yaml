@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   namespace: {{ .Chart.Name }}
   name: {{ .Chart.Name }}-outbox
+
 spec:
 
   selector:
@@ -17,6 +18,7 @@ spec:
             {{- end }}
       labels:
         app: {{ .Chart.Name }}-outbox
+        app.kubernetes.io/part-of: {{ .Chart.Name }}
     spec:
       serviceAccountName: {{ .Values.accountName }}
       securityContext:

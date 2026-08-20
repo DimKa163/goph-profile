@@ -255,7 +255,6 @@ app:
         OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
         OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
         OTEL_EXPORTER_OTLP_INSECURE: "true"
-
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/agent-pre-populate-only: "true"
@@ -360,3 +359,19 @@ kube-prometheus-stack:
 
   alertmanager:
     enabled: true
+
+serviceMonitor:
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+  spec:
+    selector:
+      matchLabels:
+        app: otel-collector
+    namespaceSelector:
+      matchNames:
+        - monitoring
+    endpoints:
+      - port: prometheus
+        path: /metrics
+        interval: 15s

@@ -4,7 +4,6 @@ metadata:
   namespace: {{ .Chart.Name }}
   name: {{ .Chart.Name }}-inbox
 spec:
-
   selector:
     matchLabels:
       app: {{ .Chart.Name }}-inbox
@@ -17,6 +16,7 @@ spec:
             {{- end }}
       labels:
         app: {{ .Chart.Name }}-inbox
+        app.kubernetes.io/part-of: {{ .Chart.Name }}
     spec:
       serviceAccountName: {{ .Values.accountName }}
       securityContext:
