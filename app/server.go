@@ -138,7 +138,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 		ServerName:     name,
 		TracerProvider: otel.GetTracerProvider(),
 		Skipper: func(c *echo.Context) bool {
-			return c.Path() == "/health"
+			return c.Path() == "/healthy"
 		},
 		MeterProvider: otel.GetMeterProvider(),
 	}))
@@ -152,7 +152,6 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 		LogUserAgent: true,
 		HandleError:  true,
 		BeforeNextFunc: func(c *echo.Context) {
-			logger := logging.Logger(ctx)
 			req := c.Request()
 			traceID := trace.SpanFromContext(req.Context()).SpanContext().TraceID()
 			fields := []zap.Field{
@@ -187,37 +186,18 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 			return nil
 		},
 	}))
-	e.GET("/health", func(c *echo.Context) error {
-		var state struct {
-			Server bool `json:"server"`
-			Db     bool `json:"db"`
-			S3     bool `json:"s3"`
-		}
-		state.Server = true
-		state.Db = true
-		state.S3 = true
-		if err := retryablePool.Ping(c.Request().Context()); err != nil {
-			logger.Error("failed to ping postgres", zap.Error(err))
-			state.Db = false
-		}
-		if err := s3.Check(c.Request().Context()); err != nil {
-			logger.Error("failed to check S3 connection", zap.Error(err))
-			state.S3 = false
-		}
-		return c.JSON(http.StatusOK, state)
-	})
+	observability.Health(ctx, e, retryablePool, s3)
 	e.File("/", filepath.Join(staticDir, "index.html"))
 	e.File("/openapi.yaml", openAPIFile())
 	webApi := e.Group("/api")
 	v1 := webApi.Group("/v1")
 
-	//uc.Register(v1)
-	//ac.Register(v1)
 	web.Register(e)
 
 	adapter := rest.NewOpenAPIHandler(ac, uc)
 
 	openapi.RegisterHandlers(v1, adapter)
+
 	e.GET("/docs", func(c *echo.Context) error {
 		return c.Render(http.StatusOK, "swaggerui.html", map[string]interface{}{})
 	})

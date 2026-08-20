@@ -193,9 +193,28 @@ app:
         repository: d1dog/goph-server
         imagePullPolicy: IfNotPresent
         port: 8080
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      podSecurityContext:
+        fsGroup: 10001
+      livenessProbe:
+        httpGet:
+          path: /healthy
+          port: 8080
+        initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
       resources:
         requests:
           cpu: 100m
+          memory: 200Mi
+        limits:
+          cpu: 200m
+          memory: 400Mi
       env:
         GOPH_ADDR: ":8080"
         GOPH_BUCKET: "goph"
@@ -234,9 +253,16 @@ app:
       image:
         repository: d1dog/goph-outbox
         imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      podSecurityContext:
+        fsGroup: 10001
       resources:
         requests:
           cpu: 100m
+          memory: 200Mi
       env:
         GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
         OTEL_SERVICE_NAME: "goph-outbox"
@@ -264,9 +290,16 @@ app:
       image:
         repository: d1dog/goph-inbox
         imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      podSecurityContext:
+        fsGroup: 10001
       resources:
         requests:
           cpu: 100m
+          memory: 200Mi
       env:
         GOPH_BUCKET: "goph"
         GOPH_REGION: "eu-east-1"

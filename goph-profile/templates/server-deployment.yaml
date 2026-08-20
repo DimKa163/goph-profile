@@ -20,6 +20,8 @@ spec:
         app: {{ .Chart.Name }}-server
     spec:
       serviceAccountName: {{ .Values.accountName }}
+      securityContext:
+        {{- toYaml .Values.app.deployment.server.podSecurityContext | nindent 8 }}
       initContainers:
         - name: wait-postgres
           image: "{{ .Values.postgres.deployment.postgres.image.repository }}:{{ .Values.postgres.deployment.postgres.image.tag }}"
@@ -62,8 +64,12 @@ spec:
         - name: {{ .Chart.Name }}-server
           image: "{{ .Values.app.deployment.server.image.repository }}:{{ .Values.app.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.server.image.imagePullPolicy }}
+          securityContext:
+            {{- toYaml .Values.app.deployment.server.securityContext | nindent 12 }}
           ports:
             - containerPort: {{ .Values.app.deployment.server.image.port }}
+          livenessProbe:
+            {{- toYaml .Values.app.deployment.server.livenessProbe | nindent 12 }}
           command:
             - sh
             - -c
