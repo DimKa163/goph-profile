@@ -68,9 +68,11 @@ spec:
           securityContext:
             {{- toYaml .Values.app.deployment.server.securityContext | nindent 12 }}
           ports:
-            - containerPort: {{ .Values.app.deployment.server.image.port }}
+            {{- toYaml .Values.app.deployment.server.image.ports | nindent 12 }}
           livenessProbe:
             {{- toYaml .Values.app.deployment.server.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.app.deployment.server.readinessProbe | nindent 12 }}
           command:
             - sh
             - -c

@@ -63,6 +63,12 @@ spec:
         - name: {{ .Chart.Name }}-inbox
           image: "{{ .Values.app.deployment.inbox.image.repository }}:{{ .Values.app.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.inbox.image.imagePullPolicy }}
+          ports:
+            {{- toYaml .Values.app.deployment.inbox.image.ports | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.app.deployment.inbox.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.app.deployment.inbox.readinessProbe | nindent 12 }}
           securityContext:
             {{- toYaml .Values.app.deployment.inbox.securityContext | nindent 12 }}
           command:

@@ -86,6 +86,9 @@ func RunInbox(ctx context.Context, conf config.GophConfig, name, version, buildD
 			zap.Bool("s3_use_ssl", conf.UseSSL),
 			zap.Bool("database_configured", conf.Database != ""),
 		)
+		if err = observability.Health(ctx, conf.HealthAddr, pgpool, s3, consumer); err != nil {
+			logger.Fatal("server health failed", zap.Error(err))
+		}
 		consumerHandler := inbox.AvatarUploadedEventWorker(ctx, kotelTracer, inbox.Idempotency(
 			infra.NewTX(retryablePool),
 			metricService,

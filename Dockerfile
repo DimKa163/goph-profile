@@ -14,11 +14,9 @@ ARG APP_NAME
 ARG APP_VERSION
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Name=goph-${APP_NAME} -X main.Version=${APP_VERSION} -X 'main.BuildDate=$(date +'%Y/%m/%d %H:%M:%S')'" -o bin/app ./cmd/${APP_NAME}
 
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN adduser -D -u 10001 appuser
-
-COPY --chown=appuser:appuser app /app
 
 USER appuser
 

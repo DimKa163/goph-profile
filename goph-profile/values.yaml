@@ -177,7 +177,11 @@ app:
       image:
         repository: d1dog/goph-server
         imagePullPolicy: IfNotPresent
-        port: 8080
+        ports:
+          - name: api
+            containerPort: 8080
+          - name: healthy
+            containerPort: 8082
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -187,8 +191,17 @@ app:
       livenessProbe:
         httpGet:
           path: /healthy
-          port: 8080
+          port: 8082
         initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      readinessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 5
         successThreshold: 1
         failureThreshold: 3
         periodSeconds: 10
@@ -238,16 +251,40 @@ app:
       image:
         repository: d1dog/goph-outbox
         imagePullPolicy: IfNotPresent
+        ports:
+          - name: healthy
+            containerPort: 8082
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
       podSecurityContext:
         fsGroup: 10001
+      livenessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      readinessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
       resources:
         requests:
           cpu: 100m
           memory: 200Mi
+        limits:
+          cpu: 200m
+          memory: 400Mi
       env:
         GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
         OTEL_SERVICE_NAME: "goph-outbox"
@@ -274,10 +311,31 @@ app:
       image:
         repository: d1dog/goph-inbox
         imagePullPolicy: IfNotPresent
+        ports:
+          - name: healthy
+            containerPort: 8082
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+      livenessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      readinessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
       podSecurityContext:
         fsGroup: 10001
       resources:

@@ -50,6 +50,12 @@ spec:
         - name: {{ .Chart.Name }}-outbox
           image: "{{ .Values.app.deployment.outbox.image.repository }}:{{ .Values.app.tag }}"
           imagePullPolicy: {{ .Values.app.deployment.outbox.image.imagePullPolicy }}
+          ports:
+            {{- toYaml .Values.app.deployment.outbox.image.ports | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.app.deployment.outbox.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.app.deployment.outbox.readinessProbe | nindent 12 }}
           securityContext:
             {{- toYaml .Values.app.deployment.outbox.securityContext | nindent 12 }}
           command:

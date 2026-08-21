@@ -75,6 +75,9 @@ func RunServer(ctx context.Context, conf config.GophConfig, name, version, build
 			logger.Fatal("failed to listen server", zap.String("addr", server.Addr), zap.Error(err))
 			return err
 		}
+		if err = observability.Health(ctx, conf.HealthAddr, pgpool, s3, nil); err != nil {
+			logger.Fatal("server health failed", zap.Error(err))
+		}
 		logger.Info("server started",
 			zap.String("addr", listener.Addr().String()),
 			zap.String("name", name),
@@ -162,7 +165,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 				zap.String("user_agent", c.Request().UserAgent()),
 				zap.String("trace_id", traceID.String()),
 			}
-			logger = logger.With(fields...)
+			logger := logger.With(fields...)
 
 			c.SetRequest(req.WithContext(logging.SetLogger(req.Context(), logger)))
 		},
@@ -186,7 +189,7 @@ func NewServer(ctx context.Context, name string, s3 entity.S3, pgpool *pgxpool.P
 			return nil
 		},
 	}))
-	observability.Health(ctx, e, retryablePool, s3)
+
 	e.File("/", filepath.Join(staticDir, "index.html"))
 	e.File("/openapi.yaml", openAPIFile())
 	webApi := e.Group("/api")
