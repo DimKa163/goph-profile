@@ -3,11 +3,12 @@ package rest
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.uber.org/zap"
 )
 
@@ -28,11 +29,16 @@ type Image struct {
 }
 type webController struct {
 	userService *usecase.UserService
+	staticDir   string
 }
 
 // NewWebController creates a web controller.
-func NewWebController(userServices *usecase.UserService) *webController {
-	return &webController{userService: userServices}
+func NewWebController(userServices *usecase.UserService, staticDir ...string) *webController {
+	dir := filepath.Join("web", "static")
+	if len(staticDir) > 0 && staticDir[0] != "" {
+		dir = staticDir[0]
+	}
+	return &webController{userService: userServices, staticDir: dir}
 }
 
 // Register registers routes on the Echo group.
@@ -42,12 +48,12 @@ func (w *webController) Register(e Section) {
 }
 
 // Index renders the index page.
-func (w *webController) Index(c echo.Context) error {
-	return c.File("web/static/index.html")
+func (w *webController) Index(c *echo.Context) error {
+	return c.File(filepath.Join(w.staticDir, "index.html"))
 }
 
 // Gallery renders the avatar gallery page.
-func (w *webController) Gallery(c echo.Context) error {
+func (w *webController) Gallery(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	userIDStr := c.Param("userId")
 	userID, err := entity.ParseEmail(userIDStr)

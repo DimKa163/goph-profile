@@ -8,6 +8,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/config"
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/shared/img"
@@ -20,8 +21,8 @@ import (
 )
 
 // RunInbox starts the inbox worker application.
-func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) error {
-	return run(name, version, func(ctx context.Context) error {
+func RunInbox(ctx context.Context, conf config.GophConfig, name, version, buildDate, commit string) error {
+	return run(ctx, name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {
@@ -61,7 +62,9 @@ func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) e
 		kotelService := kotel.NewKotel(
 			kotel.WithTracer(kotelTracer),
 		)
-
+		if err = kafka.EnsureTopic(ctx, conf.Brokers, "avatar", 3); err != nil {
+			logger.Fatal("failed to ensure topic", zap.Error(err))
+		}
 		consumer, err := conf.Consumer(ctx, kotelService, clientID, "avatar")
 		if err != nil {
 			logger.Fatal("failed to create consumer", zap.Error(err))
@@ -83,6 +86,9 @@ func RunInbox(conf config.GophConfig, name, version, buildDate, commit string) e
 			zap.Bool("s3_use_ssl", conf.UseSSL),
 			zap.Bool("database_configured", conf.Database != ""),
 		)
+		if err = observability.Health(ctx, conf.HealthAddr, pgpool, s3, consumer); err != nil {
+			logger.Fatal("server health failed", zap.Error(err))
+		}
 		consumerHandler := inbox.AvatarUploadedEventWorker(ctx, kotelTracer, inbox.Idempotency(
 			infra.NewTX(retryablePool),
 			metricService,

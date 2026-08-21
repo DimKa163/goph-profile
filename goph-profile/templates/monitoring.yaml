@@ -1,0 +1,319 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.monitoring.namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: {{ .Values.monitoring.namespace }}
+data:
+  otel-collector-config.yml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 1024
+
+      resource/add-job:
+        attributes:
+          - key: job
+            from_attribute: service.name
+            action: upsert
+
+    exporters:
+      otlphttp/loki:
+        endpoint: http://loki:3100/otlp
+        compression: "gzip"
+        tls:
+          insecure: true
+
+      prometheus:
+        endpoint: '0.0.0.0:8889'
+
+      otlp/traces:
+        endpoint: 'jaeger:4317'
+        tls:
+          insecure: true
+
+    service:
+      extensions:
+        - health_check
+      pipelines:
+        logs:
+          receivers: [ otlp ]
+          processors:
+            - resource/add-job
+            - batch
+          exporters: [ otlphttp/loki ]
+
+        metrics:
+          receivers: [ otlp ]
+          processors: [ batch ]
+          exporters: [ prometheus ]
+
+        traces:
+          receivers: [ otlp ]
+          processors: [ batch ]
+          exporters: [ otlp/traces ]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: {{ .Values.monitoring.namespace }}
+data:
+  loki-config.yml: |
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9096
+      log_level: info
+      grpc_server_max_concurrent_streams: 1000
+
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /loki
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+
+    memberlist:
+      join_members: [ ]
+
+    query_range:
+      results_cache:
+        cache:
+          embedded_cache:
+            enabled: true
+            max_size_mb: 100
+
+    limits_config:
+      metric_aggregation_enabled: true
+      enable_multi_variant_queries: true
+
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    pattern_ingester:
+      enabled: false
+
+    frontend:
+      encoding: protobuf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+    app: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+spec:
+  type: {{ .Values.monitoring.deployment.otelCollector.service.type }}
+  selector:
+    app: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+  ports:
+    - name: {{ .Values.monitoring.deployment.otelCollector.service.ports.otlpGrpc.name | quote }}
+      port: {{ .Values.monitoring.deployment.otelCollector.service.ports.otlpGrpc.port }}
+      targetPort: {{ .Values.monitoring.deployment.otelCollector.service.ports.otlpGrpc.targetPort }}
+    - name: {{ .Values.monitoring.deployment.otelCollector.service.ports.prometheus.name | quote }}
+      port: {{ .Values.monitoring.deployment.otelCollector.service.ports.prometheus.port }}
+      targetPort: {{ .Values.monitoring.deployment.otelCollector.service.ports.prometheus.targetPort }}
+    - name: {{ .Values.monitoring.deployment.otelCollector.service.ports.health.name | quote }}
+      port: {{ .Values.monitoring.deployment.otelCollector.service.ports.health.port }}
+      targetPort: {{ .Values.monitoring.deployment.otelCollector.service.ports.health.targetPort }}
+
+  {{- if ne .Values.monitoring.deployment.otelCollector.service.type "NodePort" }}
+  clusterIP: {{ .Values.monitoring.deployment.otelCollector.service.clusterIP }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+  namespace: {{ .Values.monitoring.namespace }}
+spec:
+  replicas: {{ .Values.monitoring.deployment.otelCollector.replicas }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+
+    spec:
+      containers:
+        - name: {{ .Values.monitoring.deployment.otelCollector.serviceName }}
+          image: "{{ .Values.monitoring.deployment.otelCollector.image.repository }}:{{ .Values.monitoring.deployment.otelCollector.image.tag }}"
+          imagePullPolicy: {{ .Values.monitoring.deployment.otelCollector.image.imagePullPolicy }}
+
+          ports:
+            - name: {{ .Values.monitoring.deployment.otelCollector.service.ports.otlpGrpc.name | quote }}
+              containerPort: {{ .Values.monitoring.deployment.otelCollector.service.ports.otlpGrpc.port }}
+            - name: {{ .Values.monitoring.deployment.otelCollector.service.ports.prometheus.name | quote }}
+              containerPort: {{ .Values.monitoring.deployment.otelCollector.service.ports.prometheus.port }}
+            - name: {{ .Values.monitoring.deployment.otelCollector.service.ports.health.name | quote }}
+              containerPort: {{ .Values.monitoring.deployment.otelCollector.service.ports.health.port }}
+
+          volumeMounts:
+            - mountPath: /etc/otel-collector-config.yml
+              name: otel-collector-config
+              subPath: otel-collector-config.yml
+
+          args:
+            - "--config=/etc/otel-collector-config.yml"
+
+      volumes:
+        - name: otel-collector-config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.monitoring.deployment.loki.serviceName }}
+  namespace: {{ .Values.monitoring.namespace }}
+spec:
+  type: {{ .Values.monitoring.deployment.loki.service.type }}
+  selector:
+    app: {{ .Values.monitoring.deployment.loki.serviceName }}
+  ports:
+    - port: {{ .Values.monitoring.deployment.loki.service.port }}
+      targetPort: {{ .Values.monitoring.deployment.loki.service.targetPort }}
+  {{- if ne .Values.monitoring.deployment.loki.service.type "NodePort" }}
+  clusterIP: {{ .Values.monitoring.deployment.loki.service.clusterIP }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.monitoring.deployment.loki.serviceName }}
+  namespace: {{ .Values.monitoring.namespace }}
+
+spec:
+  serviceName: {{ .Values.monitoring.deployment.loki.serviceName }}
+  replicas: {{ .Values.monitoring.deployment.loki.replicas }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.monitoring.deployment.loki.serviceName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.monitoring.deployment.loki.serviceName }}
+
+    spec:
+      containers:
+        - name: {{ .Values.monitoring.deployment.loki.serviceName }}
+          image: "{{ .Values.monitoring.deployment.loki.image.repository }}:{{ .Values.monitoring.deployment.loki.image.tag }}"
+          imagePullPolicy: {{ .Values.monitoring.deployment.loki.image.imagePullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.monitoring.deployment.loki.service.port }}
+
+          volumeMounts:
+            - mountPath: /etc/loki/loki-config.yml
+              name: loki-config
+              subPath: loki-config.yml
+
+            - mountPath: /loki
+              name: {{ .Values.monitoring.deployment.loki.serviceName }}-data
+
+          args:
+            - "-config.file=/etc/loki/loki-config.yml"
+
+      volumes:
+        - name: loki-config
+          configMap:
+            name: loki-config
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ .Values.monitoring.deployment.loki.serviceName }}-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+        {{- toYaml .Values.monitoring.deployment.loki.volumeResources | nindent 10 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.monitoring.deployment.jaeger.serviceName }}
+  namespace: {{ .Values.monitoring.namespace }}
+
+spec:
+  replicas: {{ .Values.monitoring.deployment.jaeger.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.monitoring.deployment.jaeger.serviceName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.monitoring.deployment.jaeger.serviceName }}
+
+    spec:
+      containers:
+        - name: {{ .Values.monitoring.deployment.jaeger.serviceName }}
+          image: "{{ .Values.monitoring.deployment.jaeger.image.repository }}:{{ .Values.monitoring.deployment.jaeger.image.tag }}"
+          imagePullPolicy: {{ .Values.monitoring.deployment.jaeger.image.imagePullPolicy }}
+
+          ports:
+            - name: {{ .Values.monitoring.deployment.jaeger.service.ports.ui.name }}
+              containerPort: {{ .Values.monitoring.deployment.jaeger.service.ports.ui.port }}
+            - name: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.name }}
+              containerPort: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: {{ .Values.monitoring.namespace }}
+  name: {{ .Values.monitoring.deployment.jaeger.serviceName }}
+spec:
+  type: {{ .Values.monitoring.deployment.jaeger.service.type }}
+  selector:
+    app: {{ .Values.monitoring.deployment.jaeger.serviceName }}
+  ports:
+    - name: {{ .Values.monitoring.deployment.jaeger.service.ports.ui.name }}
+      port: {{ .Values.monitoring.deployment.jaeger.service.ports.ui.port }}
+      targetPort: {{ .Values.monitoring.deployment.jaeger.service.ports.ui.targetPort }}
+
+    - name: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.name }}
+      port: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.port }}
+      targetPort: {{ .Values.monitoring.deployment.jaeger.service.ports.otlpGrpc.targetPort }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: {{ .Values.serviceMonitor.namespace }}
+  labels:
+    {{- toYaml .Values.serviceMonitor.labels | nindent 4 }}
+spec:
+  {{- toYaml .Values.serviceMonitor.spec | nindent 4 }}

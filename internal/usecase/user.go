@@ -47,7 +47,6 @@ func (s *UserService) Get(ctx context.Context, tag string, userID entity.Email, 
 	if request.Format == "" {
 		request.Format = "webp"
 	}
-
 	e, err := s.repo.FindByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, infra.ErrNoRows) {

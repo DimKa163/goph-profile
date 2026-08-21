@@ -1,0 +1,435 @@
+accountName: goph-profile
+
+postgres:
+  namespace: "postgres"
+  deployment:
+    postgres:
+      serviceName: "postgres"
+      image:
+        repository: "postgres"
+        tag: "17"
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: NodePort
+        clusterIP: None
+        port: "5432"
+        targetPort: "5432"
+      stringData:
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: goph
+        POSTGRES_DB: goph
+
+      volumeResources:
+        requests:
+          storage: 1Gi
+
+kafka:
+  namespace: kafka
+  deployment:
+    kafka:
+      serviceName: "kafka"
+      image:
+        repository: "confluentinc/cp-kafka"
+        tag: "7.6.1"
+        imagePullPolicy: IfNotPresent
+      service:
+        type: ClusterIP
+        clusterIP: ""
+        port: "9092"
+      stringData:
+        KAFKA_BROKER_ID: "1"
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+        KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092"
+        KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka.kafka.svc.cluster.local:9092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+    zookeeper:
+      serviceName: "zookeeper"
+      image:
+        repository: "confluentinc/cp-zookeeper"
+        tag: "7.6.1"
+        imagePullPolicy: IfNotPresent
+      service:
+        type: ClusterIP
+        clusterIP: None
+        port: "2181"
+
+minio:
+  namespace: minio
+  deployment:
+    minio:
+      serviceName: minio
+      image:
+        repository: minio/minio
+        tag: latest
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: ClusterIP
+        clusterIP: None
+        ports:
+          api:
+            port: "9000"
+            targetPort: "9000"
+          console:
+            port: "9001"
+            targetPort: "9001"
+      stringData:
+        MINIO_ROOT_USER: "admin"
+        MINIO_ROOT_PASSWORD: "admin12345"
+      resources:
+        requests:
+          memory: 1Gi
+        limits:
+          memory: 2Gi
+      volumeResources:
+        requests:
+          storage: 5Gi
+
+monitoring:
+  namespace: monitoring
+  deployment:
+    prometheus:
+      serviceName: prometheus
+      image:
+        repository: prom/prometheus
+        tag: v3.13.1
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: NodePort
+        port: "9090"
+        targetPort: "9090"
+    otelCollector:
+      serviceName: otel-collector
+      image:
+        repository: otel/opentelemetry-collector
+        tag: 0.143.0
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: ClusterIP
+        clusterIP: None
+        ports:
+          otlpGrpc:
+            name: otlp-grpc
+            port: "4317"
+            targetPort: "4317"
+          prometheus:
+            name: prometheus
+            port: "8889"
+            targetPort: "8889"
+          health:
+            name: health
+            port: "13133"
+            targetPort: "13133"
+    loki:
+      serviceName: loki
+      image:
+        repository: grafana/loki
+        tag: 3.7.3
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: ClusterIP
+        clusterIP: None
+        port: "3100"
+        targetPort: "3100"
+      volumeResources:
+        requests:
+          storage: 1Gi
+    jaeger:
+      serviceName: jaeger
+      image:
+        repository: jaegertracing/all-in-one
+        tag: 1.76.0
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: NodePort
+        ports:
+          ui:
+            name: ui
+            port: "16686"
+            targetPort: "16686"
+          otlpGrpc:
+            name: otlp-grpc
+            port: "4317"
+            targetPort: "4317"
+    nodeExporter:
+      serviceName: node-exporter
+      image:
+        repository: prom/node-exporter
+        tag: v1.12.0
+        imagePullPolicy: IfNotPresent
+      replicas: 1
+      service:
+        type: ClusterIP
+        clusterIP: None
+        port: "9100"
+        targetPort: "9100"
+app:
+  tag: unstable
+  deployment:
+    server:
+      image:
+        repository: d1dog/goph-server
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: api
+            containerPort: 8080
+          - name: healthy
+            containerPort: 8082
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      podSecurityContext:
+        fsGroup: 10001
+      livenessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      readinessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi
+        limits:
+          cpu: 200m
+          memory: 400Mi
+      env:
+        GOPH_ADDR: ":8080"
+        GOPH_BUCKET: "goph"
+        GOPH_REGION: "eu-east-1"
+        GOPH_ENDPOINT: "http://minio.minio:9000"
+        GOPH_USE_SSL: "false"
+        GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
+        OTEL_SERVICE_NAME: "goph-server"
+        OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+        OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "goph-profile"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/goph-profile"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/goph-profile" }}
+            export GOPH_ACCESS_KEY='{{ .Data.data.goph_access_key }}'
+            export GOPH_DATABASE='{{ .Data.data.goph_database }}'
+            export GOPH_SECRET_KEY='{{ .Data.data.goph_secret_key }}'
+          {{- end }}
+
+      autoscaling:
+        enabled: true
+        minReplicas: 1
+        maxReplicas: 10
+        targetCPUUtilizationPercentage: 80
+
+      service:
+        type: ClusterIP
+    outbox:
+      image:
+        repository: d1dog/goph-outbox
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: healthy
+            containerPort: 8082
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      podSecurityContext:
+        fsGroup: 10001
+      livenessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      readinessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi
+        limits:
+          cpu: 200m
+          memory: 400Mi
+      env:
+        GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
+        OTEL_SERVICE_NAME: "goph-outbox"
+        OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+        OTEL_EXPORTER_OTLP_INSECURE: "true"
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "goph-profile"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/goph-profile"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/goph-profile" }}
+            export GOPH_DATABASE='{{ .Data.data.goph_database }}'
+          {{- end }}
+
+      autoscaling:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 10
+        targetCPUUtilizationPercentage: 80
+    inbox:
+      image:
+        repository: d1dog/goph-inbox
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: healthy
+            containerPort: 8082
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      livenessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 15
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      readinessProbe:
+        httpGet:
+          path: /healthy
+          port: 8082
+        initialDelaySeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
+        periodSeconds: 10
+        timeoutSeconds: 2
+      podSecurityContext:
+        fsGroup: 10001
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi
+      env:
+        GOPH_BUCKET: "goph"
+        GOPH_REGION: "eu-east-1"
+        GOPH_ENDPOINT: "http://minio.minio:9000"
+        GOPH_USE_SSL: "false"
+        GOPH_BROKERS: "kafka.kafka.svc.cluster.local:9092"
+        OTEL_SERVICE_NAME: "goph-inbox"
+        OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=development"
+        OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.monitoring:4317"
+        OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+        OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-init-first: "true"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/role: "goph-profile"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/goph-profile"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/goph-profile" }}
+            export GOPH_ACCESS_KEY='{{ .Data.data.goph_access_key }}'
+            export GOPH_DATABASE='{{ .Data.data.goph_database }}'
+            export GOPH_SECRET_KEY='{{ .Data.data.goph_secret_key }}'
+          {{- end }}
+
+      autoscaling:
+        enabled: false
+        minReplicas: 1
+        maxReplicas: 10
+        targetCPUUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: "goph-profile-traefik"
+  rateLimit:
+    enabled: true
+    middlewareName: api-rate-limit
+    average: 100
+    burst: 50
+    period: 1s
+  hosts:
+    - host: goph-avatar
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: "goph-profile-server"
+          port: 80
+    - host: localhost
+      paths:
+          - path: /
+            pathType: Prefix
+            serviceName: "goph-profile-server"
+            port: 80
+
+kube-prometheus-stack:
+  enabled: true
+
+  grafana:
+    enabled: true
+
+  prometheus:
+    enabled: true
+    prometheusSpec:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+
+  prometheus-node-exporter:
+    enabled: true
+
+  kube-state-metrics:
+    enabled: true
+
+  alertmanager:
+    enabled: true
+
+serviceMonitor:
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+  spec:
+    selector:
+      matchLabels:
+        app: otel-collector
+    namespaceSelector:
+      matchNames:
+        - monitoring
+    endpoints:
+      - port: prometheus
+        path: /metrics
+        interval: 15s

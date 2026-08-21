@@ -1,0 +1,32 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Chart.Name }}-ingress
+  namespace: {{ .Chart.Name }}
+  {{- if .Values.ingress.rateLimit.enabled }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ .Chart.Name }}-{{ .Values.ingress.rateLimit.middlewareName }}@kubernetescrd"
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end}}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote}}
+      http:
+        paths:
+          {{- range .paths}}
+          - path: {{ .path | quote }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ .serviceName }}
+                port:
+                  number: {{ .port }}
+
+          {{- end }}
+
+    {{- end }}
+{{- end }}

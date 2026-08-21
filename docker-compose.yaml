@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         APP_NAME: server
+        APP_VERSION: dev
     depends_on:
       - psql
       - minio-init
@@ -34,6 +35,7 @@ services:
       dockerfile: Dockerfile
       args:
         APP_NAME: outbox
+        APP_VERSION: dev
     environment:
       GOPH_DATABASE: postgres://dev:dev@psql:5432/goph?sslmode=disable
       GOPH_BROKERS: kafka:9092
@@ -54,6 +56,7 @@ services:
       dockerfile: Dockerfile
       args:
         APP_NAME: inbox
+        APP_VERSION: dev
     environment:
       GOPH_DATABASE: postgres://dev:dev@psql:5432/goph?sslmode=disable
       GOPH_BROKERS: kafka:9092

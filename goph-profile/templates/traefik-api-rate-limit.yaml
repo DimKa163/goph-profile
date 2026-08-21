@@ -1,0 +1,12 @@
+{{- if and .Values.ingress.enabled .Values.ingress.rateLimit.enabled -}}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ .Values.ingress.rateLimit.middlewareName }}
+  namespace: {{ .Chart.Name }}
+spec:
+  rateLimit:
+    average: {{ .Values.ingress.rateLimit.average }}
+    burst: {{ .Values.ingress.rateLimit.burst }}
+    period: {{ .Values.ingress.rateLimit.period | quote }}
+{{- end }}

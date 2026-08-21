@@ -5,7 +5,9 @@ import (
 
 	"github.com/DimKa163/goph-profile/internal/config"
 	"github.com/DimKa163/goph-profile/internal/infra"
+	"github.com/DimKa163/goph-profile/internal/infra/kafka"
 	"github.com/DimKa163/goph-profile/internal/logging"
+	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/worker/outbox"
 	"github.com/DimKa163/goph-profile/pkg/retryablepgxpool"
 	"go.opentelemetry.io/otel"
@@ -13,8 +15,8 @@ import (
 )
 
 // RunOutbox starts the outbox worker application.
-func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) error {
-	return run(name, version, func(ctx context.Context) error {
+func RunOutbox(ctx context.Context, conf config.GophConfig, name, version, buildDate, commit string) error {
+	return run(ctx, name, version, func(ctx context.Context) error {
 		logger := logging.Logger(ctx)
 		pgpool, err := conf.CreatePg(ctx)
 		if err != nil {
@@ -28,6 +30,9 @@ func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) 
 		app := outbox.New(otel.Tracer("outbox"), infra.NewTX(retryablePool), infra.NewTaskRepository(retryablePool))
 		producerPool := conf.ProducerPool(ctx, name)
 		defer producerPool.Close()
+		if err = kafka.EnsureTopic(ctx, conf.Brokers, "avatar", 3); err != nil {
+			logger.Fatal("failed to ensure topic", zap.Error(err))
+		}
 		logger.Info("outbox started",
 			zap.String("name", name),
 			zap.String("version", version),
@@ -41,6 +46,14 @@ func RunOutbox(conf config.GophConfig, name, version, buildDate, commit string) 
 			zap.Int("workers", conf.Workers),
 			zap.Bool("database_configured", conf.Database != ""),
 		)
+		cl, err := conf.Producer(ctx, name)
+		if err != nil {
+			logger.Fatal("failed to create producer client", zap.Error(err))
+		}
+		defer cl.Close()
+		if err = observability.Health(ctx, conf.HealthAddr, pgpool, nil, cl); err != nil {
+			logger.Fatal("server health failed", zap.Error(err))
+		}
 		app.Start(logging.SetLogger(ctx, logger), producerPool.Producers(), conf.BatchSize, conf.WaitTime, 1000*conf.WaitTime)
 		return nil
 	})
