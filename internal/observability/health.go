@@ -45,7 +45,9 @@ func Health(ctx context.Context, addr string, pool *pgxpool.Pool, s3 entity.S3, 
 		return err
 	}
 	go func() {
-		server := http.Server{}
+		server := http.Server{
+			ReadTimeout: 15 * time.Second,
+		}
 		mux := http.NewServeMux()
 		mux.HandleFunc("/healthy", func(w http.ResponseWriter, r *http.Request) {
 			state := healthState{
