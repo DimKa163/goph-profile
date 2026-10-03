@@ -3,11 +3,15 @@ package infra
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/DimKa163/goph-profile/internal/entity"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -111,4 +115,34 @@ func (s *s3Client) Delete(ctx context.Context, userID entity.Email, key string) 
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 	return nil
+}
+
+func EnsureBucket(ctx context.Context, client *s3.Client, bucketName, region string) error {
+	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: new(bucketName),
+	})
+	if err == nil {
+		return nil
+	}
+	if _, ok := errors.AsType[*types.NotFound](err); !ok {
+		return err
+	}
+
+	input := &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	_, err = client.CreateBucket(ctx, input)
+	if err != nil {
+		if _, ok := errors.AsType[*types.BucketAlreadyOwnedByYou](err); ok {
+			return nil
+		}
+		return err
+	}
+
+	return s3.NewBucketExistsWaiter(client).Wait(
+		ctx,
+		&s3.HeadBucketInput{Bucket: aws.String(bucketName)},
+		time.Minute,
+	)
 }

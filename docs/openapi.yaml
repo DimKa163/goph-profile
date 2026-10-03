@@ -1,0 +1,409 @@
+openapi: 3.0.3
+
+info:
+  title: Goph Profile API
+  version: 1.0.0
+  description: Avatar profile service
+
+servers:
+  - url: /api/v1
+
+paths:
+  /avatars:
+    post:
+      operationId: uploadAvatar
+      summary: Upload avatar
+      tags:
+        - Avatars
+      parameters:
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Upload accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadAvatarResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/FileTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /avatars/{avatar_id}:
+    get:
+      operationId: getAvatar
+      summary: Get avatar image
+      tags:
+        - Avatars
+      parameters:
+        - name: avatar_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [original, 100x100, 300x300]
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [jpeg, png, webp]
+      responses:
+        "200":
+          description: Avatar image
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Not modified
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      operationId: deleteAvatar
+      summary: Delete avatar
+      tags:
+        - Avatars
+      parameters:
+        - name: avatar_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /avatars/{avatar_id}/metadata:
+    get:
+      operationId: getAvatarMetadata
+      summary: Get avatar metadata
+      tags:
+        - Avatars
+      parameters:
+        - name: avatar_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Avatar metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarMetadata"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{user_id}/avatar:
+    get:
+      operationId: getCurrentUserAvatar
+      summary: Get current user avatar image
+      tags:
+        - Users
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [original, 100x100, 300x300]
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [jpeg, png, webp]
+      responses:
+        "200":
+          description: Current avatar image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Not modified
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      operationId: deleteUserAvatar
+      summary: Delete current user avatar
+      tags:
+        - Users
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /users/{user_id}/avatars:
+    get:
+      operationId: getAllUserAvatars
+      summary: Get all user avatars
+      tags:
+        - Users
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User avatars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AvatarMetadata"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceError"
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceError"
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceError"
+
+    FileTooLarge:
+      description: File too large
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceError"
+
+    InternalError:
+      description: Internal error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceError"
+
+  schemas:
+    ServiceError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: invalid_avatar_id
+        message:
+          type: string
+          example: invalid avatar id
+
+    UploadAvatarResponse:
+      type: object
+      required:
+        - id
+        - userId
+        - status
+        - created_at
+        - url
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+          format: email
+        status:
+          type: string
+          example: processing
+        created_at:
+          type: string
+          format: date-time
+        url:
+          type: string
+
+    AvatarMetadata:
+      type: object
+      required:
+        - id
+        - userId
+        - file_name
+        - mime_type
+        - size
+        - dimension
+        - thumbnails
+        - inactive
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+          format: email
+        file_name:
+          type: string
+        mime_type:
+          type: string
+        size:
+          type: integer
+          format: int64
+        dimension:
+          $ref: "#/components/schemas/Dimension"
+        thumbnails:
+          type: array
+          items:
+            $ref: "#/components/schemas/Thumbnail"
+        inactive:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Thumbnail:
+      type: object
+      required:
+        - url
+        - size
+      properties:
+        url:
+          type: string
+        size:
+          type: string
+
+    Dimension:
+      type: object
+      required:
+        - height
+        - width
+      properties:
+        height:
+          type: integer
+        width:
+          type: integer

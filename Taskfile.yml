@@ -49,3 +49,6 @@ tasks:
     cmd:
       go fmt ./...
 
+  go-openapi:
+    cmd:
+      oapi-codegen -config oapi-codegen.yaml docs/openapi.yaml

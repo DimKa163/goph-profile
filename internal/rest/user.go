@@ -7,7 +7,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/entity"
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/usecase"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.uber.org/zap"
 )
 
@@ -24,15 +24,15 @@ func NewUserController(userServices *usecase.UserService) *userController {
 
 // Register registers routes on the Echo group.
 func (u *userController) Register(c Section) {
-	c.GET("/users/:userId/avatar", u.Avatar)
-	c.GET("/users/:userId/avatars", u.Avatars)
-	c.DELETE("/users/:userId/avatar", u.Delete)
+	c.GET("/users/:user_id/avatar", u.Avatar)
+	c.GET("/users/:user_id/avatars", u.Avatars)
+	c.DELETE("/users/:user_id/avatar", u.Delete)
 }
 
 // Avatar handles avatar upload or retrieval requests.
-func (u *userController) Avatar(c echo.Context) error {
+func (u *userController) Avatar(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
-	userID, err := entity.ParseEmail(c.Param("userId"))
+	userID, err := entity.ParseEmail(c.Param("user_id"))
 	if err != nil {
 		return Error(c, err)
 	}
@@ -41,8 +41,9 @@ func (u *userController) Avatar(c echo.Context) error {
 		Format: c.QueryParam("format"),
 		Size:   entity.Size(c.QueryParam("size")),
 	}
-
-	e, buf, err := u.userService.Get(c.Request().Context(), c.Request().Header.Get("If-None-Match"), userID, &req)
+	logger = logger.With(zap.String("user_id", userID.String()))
+	ctx := logging.SetLogger(c.Request().Context(), logger)
+	e, buf, err := u.userService.Get(ctx, c.Request().Header.Get("If-None-Match"), userID, &req)
 	switch {
 	case err == nil:
 	case errors.Is(err, usecase.ErrAvatarNotModified):
@@ -64,7 +65,7 @@ func (u *userController) Avatar(c echo.Context) error {
 	return avatarBlob(c, e, buf)
 }
 
-func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
+func avatarBlob(c *echo.Context, e *entity.Image, buf []byte) error {
 	logger := logging.Logger(c.Request().Context())
 	if e == nil {
 		logger.Error("avatarBlob called with nil image")
@@ -80,9 +81,9 @@ func avatarBlob(c echo.Context, e *entity.Image, buf []byte) error {
 }
 
 // Avatars handles user avatar list requests.
-func (u *userController) Avatars(c echo.Context) error {
+func (u *userController) Avatars(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
-	userID, err := entity.ParseEmail(c.Param("userId"))
+	userID, err := entity.ParseEmail(c.Param("user_id"))
 	if err != nil {
 		return Error(c, err)
 	}
@@ -103,9 +104,9 @@ func (u *userController) Avatars(c echo.Context) error {
 }
 
 // Delete removes or marks a record as deleted.
-func (u *userController) Delete(c echo.Context) error {
+func (u *userController) Delete(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
-	userID, err := entity.ParseEmail(c.Param("userId"))
+	userID, err := entity.ParseEmail(c.Param("user_id"))
 	if err != nil {
 		return Error(c, err)
 	}

@@ -24,6 +24,8 @@ import (
 type GophConfig struct {
 	// Addr is the HTTP listen address.
 	Addr string `env:"GOPH_ADDR" envDefault:":8080"`
+	// HealthAddr is the HTTP listen address.
+	HealthAddr string `env:"HEALTH_GOPH_ADDR" envDefault:":8082"`
 	// Database is the PostgreSQL connection string.
 	Database string `env:"GOPH_DATABASE" envDefault:"goph"`
 	// Brokers is the Kafka broker list.

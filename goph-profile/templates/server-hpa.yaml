@@ -1,0 +1,23 @@
+{{- if .Values.app.deployment.server.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Chart.Name }}-server
+  namespace: {{ .Chart.Name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Chart.Name }}-server
+  minReplicas: {{ .Values.app.deployment.server.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.app.deployment.server.autoscaling.maxReplicas }}
+  metrics:
+    {{- if .Values.app.deployment.server.autoscaling.targetCPUUtilizationPercentage }}
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: {{ .Values.app.deployment.server.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+{{- end }}

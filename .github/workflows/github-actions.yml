@@ -3,9 +3,8 @@ run-name: testing goph-profile
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - "**"
 
 permissions:
   contents: read
@@ -25,7 +24,6 @@ jobs:
 
       - name: Vet
         run: task go-lint
-
 
   test:
     runs-on: ubuntu-latest

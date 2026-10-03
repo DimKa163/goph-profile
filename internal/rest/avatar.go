@@ -12,7 +12,7 @@ import (
 	"github.com/DimKa163/goph-profile/internal/logging"
 	"github.com/DimKa163/goph-profile/internal/observability"
 	"github.com/DimKa163/goph-profile/internal/usecase"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -40,7 +40,7 @@ func (a *avatarController) Register(e Section) {
 }
 
 // Avatar handles avatar upload or retrieval requests.
-func (a *avatarController) Avatar(c echo.Context) error {
+func (a *avatarController) Avatar(c *echo.Context) error {
 	startTime := time.Now()
 	status := observability.Success
 	var userID entity.Email
@@ -113,7 +113,7 @@ func (a *avatarController) Avatar(c echo.Context) error {
 }
 
 // Get returns the requested avatar image.
-func (a *avatarController) Get(c echo.Context) error {
+func (a *avatarController) Get(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
@@ -140,7 +140,7 @@ func (a *avatarController) Get(c echo.Context) error {
 }
 
 // Delete removes or marks a record as deleted.
-func (a *avatarController) Delete(c echo.Context) error {
+func (a *avatarController) Delete(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	id, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
@@ -160,7 +160,7 @@ func (a *avatarController) Delete(c echo.Context) error {
 }
 
 // Metadata describes avatar metadata returned by the API.
-func (a *avatarController) Metadata(c echo.Context) error {
+func (a *avatarController) Metadata(c *echo.Context) error {
 	logger := logging.Logger(c.Request().Context())
 	avatarID, err := entity.ParseAvatarID(c.Param("avatar_id"))
 	if err != nil {
@@ -178,7 +178,7 @@ func (a *avatarController) Metadata(c echo.Context) error {
 	return c.JSON(http.StatusOK, &response)
 }
 
-func buildBaseURL(c echo.Context) string {
+func buildBaseURL(c *echo.Context) string {
 	req := c.Request()
 
 	scheme := req.Header.Get("X-Forwarded-Proto")

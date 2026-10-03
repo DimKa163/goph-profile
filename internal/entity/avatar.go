@@ -4,6 +4,7 @@ package entity
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -42,10 +43,14 @@ func ParseEmail(email string) (Email, error) {
 	if email == "" {
 		return "", WrapError(InvalidUserIDErrorCode, "user id must not be empty", nil)
 	}
-	if !emailRegex.MatchString(email) {
-		return "", WrapError(InvalidUserIDErrorCode, email, nil)
+	e, err := url.QueryUnescape(email)
+	if err != nil {
+		return "", WrapError(InvalidUserIDErrorCode, fmt.Sprintf("invalid email address %s", email), err)
 	}
-	return Email(email), nil
+	if !emailRegex.MatchString(e) {
+		return "", WrapError(InvalidUserIDErrorCode, e, nil)
+	}
+	return Email(e), nil
 }
 
 // String
